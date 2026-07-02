@@ -155,7 +155,14 @@ Answer concisely using the provided tools.
 ```
  
 No model, no IO — prompts are pure templates (per decision #2).
- 
+
+**Rules:**
+- Frontmatter starts at byte 0: the opening `---` must be the first line of the file, and a closing `---` line is required. The interior is HCL (so `#` comments work there), allowing exactly two attributes: `name` (required string) and `requires` (optional list of string). Unknown attributes are hard errors.
+- Variable grammar: `{{ident}}` where `ident` matches `[A-Za-z_][A-Za-z0-9_]*`, with optional whitespace inside the braces (`{{ date }}`). Any other brace sequence — `{{1bad}}`, `{{not-a-var}}`, a lone `{{` — is literal body text, not an error, so prompts can embed JSON and code examples freely. There is no escape syntax for a literal well-formed `{{var}}` in v0.
+- `requires` is an optional contract. Omitted → the variable set is inferred from the body. Present (including an explicit `requires = []`) → it must match the body's variables exactly, both directions: a body variable missing from `requires` and a `requires` entry never used in the body are both compile errors. Duplicate entries are a compile error.
+- An empty (or whitespace-only) body is a compile error — there is no valid use for a zero-byte prompt.
+- The body is everything after the closing delimiter line, preserved byte for byte.
+
 ### 3.5 `target` (project file)
  
 Where the spec goes. Two categories mirror the two verbs:

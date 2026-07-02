@@ -9,7 +9,7 @@ type ProjectFile struct {
 	Targets []*Target
 }
 
-// Model is a vendor-neutral model definition (SPECS.md §3.1). Agents
+// Model is a vendor-neutral model definition (SPEC.md §3.1). Agents
 // reference it by address (model.<Name>), never by raw provider strings.
 type Model struct {
 	Name     string // block label, e.g. "fast" in model.fast
@@ -21,7 +21,7 @@ type Model struct {
 // Addr returns the block address used in references and diagnostics.
 func (m *Model) Addr() string { return "model." + m.Name }
 
-// Target is a build or deployment destination (SPECS.md §3.5).
+// Target is a build or deployment destination (SPEC.md §3.5).
 type Target struct {
 	Name   string // block label
 	Type   string // "codegen" or "platform"

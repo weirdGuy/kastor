@@ -1,0 +1,7 @@
+---
+name     = "json_example"
+requires = ["payload"]
+---
+Return JSON shaped like {"ok": true}. Sequences such as {{ not-a-var }},
+{{1bad}}, and a lone {{ are literal text, not variables.
+Data: {{payload}}
