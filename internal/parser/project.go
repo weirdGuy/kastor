@@ -114,8 +114,14 @@ func ParseProject(filename string, src []byte) (*schema.ProjectFile, error) {
 			if target.Output == "" {
 				return nil, fmt.Errorf("%s: codegen target requires \"output\"", target.Addr())
 			}
+			if target.Auth != nil {
+				return nil, fmt.Errorf("%s: codegen target does not allow \"auth\"", target.Addr())
+			}
 		case "platform":
 			// auth is optional; credentials may come from the environment
+			if t.Output != nil {
+				return nil, fmt.Errorf("%s: platform target does not allow \"output\"", target.Addr())
+			}
 		default:
 			return nil, fmt.Errorf("%s: invalid type %q (expected \"codegen\" or \"platform\")", target.Addr(), target.Type)
 		}

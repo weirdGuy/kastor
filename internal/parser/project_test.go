@@ -100,6 +100,16 @@ func TestParseProjectFile(t *testing.T) {
 			file:    "invalid_codegen_no_output.hcl",
 			wantErr: `target.langgraph: codegen target requires "output"`,
 		},
+		{
+			name:    "codegen target rejects auth block",
+			file:    "invalid_codegen_auth.hcl",
+			wantErr: `target.langgraph: codegen target does not allow "auth"`,
+		},
+		{
+			name:    "platform target rejects output attribute",
+			file:    "invalid_platform_output.hcl",
+			wantErr: `target.openai_assistants: platform target does not allow "output"`,
+		},
 	}
 
 	for _, tt := range tests {

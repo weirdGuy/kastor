@@ -175,6 +175,12 @@ target "openai_assistants" {
   }
 }
 ```
+
+**Rules:**
+- `type` is a closed enum: `codegen` or `platform`. Unknown values are a compile error; new target types are additive spec changes.
+- `codegen` targets require `output` and do not allow `auth`.
+- `platform` targets do not allow `output`; `auth` is optional (ambient credentials — env vars, instance roles — are the common case).
+- Fields that are meaningless for a target's type are errors, not ignored (configs rot through silent acceptance).
  
 ---
  
