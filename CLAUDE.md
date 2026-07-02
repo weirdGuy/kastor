@@ -52,5 +52,6 @@ gofmt -l .                     # formatting check (must be clean)
 ## Workflow
 
 - Small PRs mapped to GitHub issues; reference issue number in commits
+- Never commit directly to main; always branch (`feat/<issue>-<slug>`) + PR
 - `adl validate` must stay fast — it runs on every save in editor integrations later
 - When adding a block field: update schema struct → validation → parser test fixtures → SPEC.md if it's a design change

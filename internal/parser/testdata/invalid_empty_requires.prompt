@@ -1,0 +1,5 @@
+---
+name     = "weather_system"
+requires = []
+---
+The user is asking about {{location}}.

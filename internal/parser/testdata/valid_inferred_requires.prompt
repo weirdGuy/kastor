@@ -1,0 +1,4 @@
+---
+name = "forecast_summary"
+---
+Summarize the forecast for {{location}} on {{date}}.

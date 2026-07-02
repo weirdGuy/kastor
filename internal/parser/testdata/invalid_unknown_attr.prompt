@@ -1,0 +1,5 @@
+---
+name  = "weather_system"
+model = "gpt-4o-mini"
+---
+Prompts are pure templates; they must not carry a model.
