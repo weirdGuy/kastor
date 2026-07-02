@@ -140,6 +140,15 @@ tool "web_search" {
 | `builtin` | Provided by target platform (e.g. OpenAI's built-in web search) |
 | `runtime` | Implemented in user code within the generated project (codegen emits a stub) |
 | `script` | Inline/local script executed by generated glue code |
+
+**Rules:**
+- `kind` is a closed enum (like `target.type`): `mcp | http | builtin | runtime | script`. Unknown kinds are compile errors.
+- Exactly one `source` block and exactly one `returns` block per tool. Zero `param` blocks is fine.
+- `uri` is required for `mcp`, `http`, and `script` sources; it is an error on `builtin` and `runtime` (they have no external location — the platform or generated stub is the implementation). Meaningless fields are errors, not ignored.
+- Param and returns types are bare keywords, not strings: `type = string`, never `type = "string"`. Closed enum in v0: `string | number | bool` (compound types deferred to v1).
+- `default` must be a literal whose type matches the declared `type`; a mismatch or an explicit `default = null` is a compile error. A param with a `default` is optional at call time; there is no separate `optional` attribute on tool params.
+- `description` is optional on both the tool and its params at parse time (targets may enforce more).
+- A `.tool` file may contain multiple `tool` blocks; duplicate names within a file are a parse error (module-wide duplicates are owned by module loading, issue #6).
  
 ### 3.4 `prompt` (.prompt file)
  
