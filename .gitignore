@@ -1,0 +1,5 @@
+# Built binary
+/adl
+
+# Test/coverage artifacts
+*.out
