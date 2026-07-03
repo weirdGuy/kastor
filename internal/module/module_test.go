@@ -58,6 +58,40 @@ func TestLoadValidModule(t *testing.T) {
 	}
 }
 
+func TestFiles(t *testing.T) {
+	got, err := module.Files(filepath.Join("testdata", "walk_skip"))
+	if err != nil {
+		t.Fatalf("Files: unexpected error: %v", err)
+	}
+
+	// Lexical walk order; dot-directories and the codegen target output
+	// directory (gen/, from adl.hcl) are skipped. Non-ADL files are still
+	// listed — callers filter by extension.
+	want := []string{
+		"README.md",
+		"adl.hcl",
+		"solo.agent",
+		"solo_system.prompt",
+		filepath.Join("sub", "search.tool"),
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("Files (-want +got):\n%s", diff)
+	}
+}
+
+func TestLoadSkipsTargetOutputDirs(t *testing.T) {
+	mod, err := module.Load(filepath.Join("testdata", "walk_skip"))
+	if err != nil {
+		t.Fatalf("Load: unexpected error: %v", err)
+	}
+	if _, ok := mod.Lookup("agent.leftover"); ok {
+		t.Error("agent.leftover found: generated output directory was not skipped")
+	}
+	if _, ok := mod.Lookup("agent.solo"); !ok {
+		t.Error("agent.solo not found")
+	}
+}
+
 func TestLoadEmptyDir(t *testing.T) {
 	mod, err := module.Load(t.TempDir())
 	if err != nil {

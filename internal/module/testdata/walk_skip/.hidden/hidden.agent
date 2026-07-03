@@ -1,0 +1,4 @@
+agent "hidden" {
+  model         = model.ghost
+  system_prompt = prompt.ghost
+}

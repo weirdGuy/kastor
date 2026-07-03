@@ -46,30 +46,62 @@ func (m *Module) Lookup(addr string) (*Symbol, bool) {
 	return sym, ok
 }
 
-// Load walks the directory tree rooted at root, parses every ADL file
-// (.agent, .tool, .prompt, .adl, adl.hcl), and resolves all references.
-// Hidden files and directories (dot-prefixed) are skipped. All errors —
-// parse failures, cross-file duplicate addresses, unknown references — are
-// collected and returned joined, so one run reports everything.
+// Load parses every ADL file in the module rooted at root (.agent, .tool,
+// .prompt, .adl, adl.hcl — discovered via Files) and resolves all
+// references. All errors — parse failures, cross-file duplicate addresses,
+// unknown references — are collected and returned joined, so one run
+// reports everything.
 func Load(root string) (*Module, error) {
-	info, err := os.Stat(root)
+	files, err := Files(root)
 	if err != nil {
 		return nil, fmt.Errorf("loading module: %w", err)
-	}
-	if !info.IsDir() {
-		return nil, fmt.Errorf("loading module: %s is not a directory", root)
 	}
 
 	mod := &Module{Root: root, symbols: map[string]*Symbol{}}
 
 	var errs []error
+	for _, rel := range files {
+		errs = append(errs, mod.loadFile(filepath.Join(root, rel), rel)...)
+	}
+
+	for _, a := range mod.Agents {
+		errs = append(errs, mod.resolveAgent(a)...)
+	}
+
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
+	}
+	return mod, nil
+}
+
+// Files walks the directory tree rooted at root and returns the relative
+// paths of every file that belongs to the module, in lexical walk order.
+// Hidden (dot-prefixed) files and directories are skipped, as are the
+// output directories of codegen targets declared in the module's project
+// files — generated code is never module input. Non-ADL files are
+// included; callers filter by extension.
+func Files(root string) ([]string, error) {
+	info, err := os.Stat(root)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("%s is not a directory", root)
+	}
+
+	skip, err := outputDirs(root)
+	if err != nil {
+		return nil, fmt.Errorf("walking module directory: %w", err)
+	}
+
+	var files []string
 	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		hidden := strings.HasPrefix(d.Name(), ".") && path != root
 		if d.IsDir() {
-			if hidden {
+			if hidden || skip[filepath.Clean(path)] {
 				return filepath.SkipDir
 			}
 			return nil
@@ -82,21 +114,61 @@ func Load(root string) (*Module, error) {
 		if err != nil {
 			return err
 		}
-		errs = append(errs, mod.loadFile(path, rel)...)
+		files = append(files, rel)
 		return nil
 	})
 	if walkErr != nil {
 		return nil, fmt.Errorf("walking module directory: %w", walkErr)
 	}
+	return files, nil
+}
 
-	for _, a := range mod.Agents {
-		errs = append(errs, mod.resolveAgent(a)...)
-	}
+// outputDirs pre-scans the tree for project files and collects their
+// codegen target output directories, resolved relative to the declaring
+// file. A project file that fails to parse contributes nothing here — the
+// parse error surfaces when the file itself is loaded or formatted.
+func outputDirs(root string) (map[string]bool, error) {
+	dirs := map[string]bool{}
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		hidden := strings.HasPrefix(d.Name(), ".") && path != root
+		if d.IsDir() {
+			if hidden {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if hidden || !isProjectFile(path) {
+			return nil
+		}
 
-	if err := errors.Join(errs...); err != nil {
+		project, err := parser.ParseProjectFile(path)
+		if err != nil {
+			return nil
+		}
+		for _, t := range project.Targets {
+			if t.Output == "" {
+				continue
+			}
+			out := t.Output
+			if !filepath.IsAbs(out) {
+				out = filepath.Join(filepath.Dir(path), out)
+			}
+			dirs[filepath.Clean(out)] = true
+		}
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
-	return mod, nil
+	return dirs, nil
+}
+
+// isProjectFile reports whether path is a project file (adl.hcl or *.adl).
+func isProjectFile(path string) bool {
+	return filepath.Ext(path) == ".adl" || filepath.Base(path) == "adl.hcl"
 }
 
 // loadFile parses one ADL file (dispatched on its name) and registers its
@@ -143,7 +215,7 @@ func (m *Module) loadFile(path, rel string) []error {
 			m.Prompts = append(m.Prompts, prompt)
 		}
 	case ".adl", ".hcl":
-		if filepath.Ext(path) == ".hcl" && filepath.Base(path) != "adl.hcl" {
+		if !isProjectFile(path) {
 			return nil
 		}
 		project, err := parser.ParseProjectFile(path)

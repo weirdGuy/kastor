@@ -1,0 +1,4 @@
+agent "solo" {
+  model         = model.fast
+  system_prompt = prompt.solo_system
+}

@@ -1,0 +1,4 @@
+agent "ok" {
+  model         = model.fast
+  system_prompt = prompt.x
+}

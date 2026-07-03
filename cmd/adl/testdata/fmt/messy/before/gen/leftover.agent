@@ -1,0 +1,3 @@
+agent "leftover"{
+model=model.fast
+}

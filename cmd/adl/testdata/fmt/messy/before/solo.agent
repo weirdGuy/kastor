@@ -1,0 +1,13 @@
+agent   "solo" {
+model=model.fast
+      system_prompt   = prompt.solo_system
+  tools=[tool.web_search]
+
+  input   "question" {
+type=string
+  }
+
+output "answer" {
+      type = string
+}
+}
