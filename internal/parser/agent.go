@@ -95,11 +95,15 @@ func decodeAgent(a agentHCL) (*schema.Agent, error) {
 	}
 	agent.Model = model
 
-	systemPrompt, err := requiredRef(agent.Addr(), "system_prompt", "prompt", a.SystemPrompt)
-	if err != nil {
-		return nil, err
+	// SPEC.md §3.2: system_prompt is optional; without one the prompt-variable
+	// check downstream is a no-op.
+	if !absentExpr(a.SystemPrompt) {
+		systemPrompt, err := simpleRef(agent.Addr(), "system_prompt", "prompt", a.SystemPrompt)
+		if err != nil {
+			return nil, err
+		}
+		agent.SystemPrompt = systemPrompt
 	}
-	agent.SystemPrompt = systemPrompt
 
 	tools, err := refList(agent.Addr(), "tools", "tool", a.Tools)
 	if err != nil {

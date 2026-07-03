@@ -40,7 +40,10 @@ func Build(mod *module.Module) (*Graph, error) {
 		g.deps[t.Addr()] = nil
 	}
 	for _, a := range mod.Agents {
-		refs := []string{a.Model, a.SystemPrompt}
+		refs := []string{a.Model}
+		if a.SystemPrompt != "" {
+			refs = append(refs, a.SystemPrompt)
+		}
 		refs = append(refs, a.Tools...)
 		refs = append(refs, a.DependsOn...)
 		for _, in := range a.Inputs {

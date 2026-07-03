@@ -58,6 +58,22 @@ func TestLoadValidModule(t *testing.T) {
 	}
 }
 
+// SPEC.md §3.2: system_prompt is optional; without one the prompt-variable
+// check is a no-op, and the agent must still be a valid depends_on target.
+func TestLoadAgentWithoutSystemPrompt(t *testing.T) {
+	mod, err := module.Load(filepath.Join("testdata", "no_system_prompt"))
+	if err != nil {
+		t.Fatalf("Load: unexpected error: %v", err)
+	}
+	sym, ok := mod.Lookup("agent.geocoder")
+	if !ok {
+		t.Fatal(`Lookup("agent.geocoder") not found`)
+	}
+	if got := sym.Block.(*schema.Agent).SystemPrompt; got != "" {
+		t.Errorf("SystemPrompt = %q, want empty", got)
+	}
+}
+
 func TestFiles(t *testing.T) {
 	got, err := module.Files(filepath.Join("testdata", "walk_skip"))
 	if err != nil {

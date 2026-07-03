@@ -7,7 +7,7 @@ type Agent struct {
 	Name         string // block label, e.g. "weather" in agent.weather
 	Description  string // optional
 	Model        string // required reference, "model.<name>"
-	SystemPrompt string // required reference, "prompt.<name>"
+	SystemPrompt string // optional reference, "prompt.<name>"; empty when absent
 	Tools        []string
 	Inputs       []*AgentInput
 	Outputs      []*AgentOutput

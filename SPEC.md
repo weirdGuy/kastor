@@ -96,6 +96,7 @@ agent "weather" {
 - Agent owns the **model** and the **IO contract**.
 - Prompt owns only its **template body** and the **variables it requires**.
 - Validation: every variable a prompt requires must be satisfiable from the agent's inputs/outputs; conflict = compile error.
+- `system_prompt` is **optional** (issue #7): an agent may omit it entirely, in which case the prompt-variable check is a no-op. When present it must be a `prompt.<name>` reference.
 ### 3.3 `tool` (.tool file)
  
 A tool is an **interface + implementation source**.
