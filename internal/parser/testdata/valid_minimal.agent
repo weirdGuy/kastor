@@ -1,0 +1,4 @@
+agent "echo" {
+  model         = model.fast
+  system_prompt = prompt.echo_system
+}

@@ -1,0 +1,37 @@
+agent "weather" {
+  description = "Answers weather questions for a location and date"
+
+  model         = model.fast
+  system_prompt = prompt.weather_system
+
+  tools = [tool.web_search, tool.geocode]
+
+  input "location" {
+    type        = string
+    description = "The location to get the weather for"
+  }
+
+  input "date" {
+    type     = string
+    optional = true
+  }
+
+  input "max_hops" {
+    type    = number
+    default = 3
+  }
+
+  # Implicit dependency: created because we reference agent.forecast
+  input "forecast_context" {
+    type    = string
+    default = agent.forecast.output.summary
+  }
+
+  output "weather" {
+    type        = string
+    description = "The weather report"
+  }
+
+  # Explicit fallback when no reference exists (rare)
+  depends_on = [agent.geocoder]
+}

@@ -1,0 +1,9 @@
+agent "weather" {
+  model         = model.fast
+  system_prompt = prompt.weather_system
+}
+
+agent "weather" {
+  model         = model.smart
+  system_prompt = prompt.weather_system
+}

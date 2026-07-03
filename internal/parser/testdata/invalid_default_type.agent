@@ -1,0 +1,9 @@
+agent "weather" {
+  model         = model.fast
+  system_prompt = prompt.weather_system
+
+  input "location" {
+    type    = string
+    default = 42
+  }
+}

@@ -1,0 +1,4 @@
+agent "weather" {
+  model         = model.fast
+  system_prompt = tool.web_search
+}

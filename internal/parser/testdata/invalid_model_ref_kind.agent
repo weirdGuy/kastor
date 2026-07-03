@@ -1,0 +1,4 @@
+agent "weather" {
+  model         = prompt.weather_system
+  system_prompt = prompt.weather_system
+}

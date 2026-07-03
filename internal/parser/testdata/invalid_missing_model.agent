@@ -1,0 +1,3 @@
+agent "weather" {
+  system_prompt = prompt.weather_system
+}

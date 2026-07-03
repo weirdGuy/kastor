@@ -1,0 +1,26 @@
+agent "geocoder" {
+  model         = model.fast
+  system_prompt = prompt.geocoder_system
+
+  input "place" {
+    type = string
+  }
+
+  output "coordinates" {
+    type = string
+  }
+}
+
+agent "forecast" {
+  model         = model.smart
+  system_prompt = prompt.forecast_system
+
+  input "coordinates" {
+    type    = string
+    default = agent.geocoder.output.coordinates
+  }
+
+  output "summary" {
+    type = string
+  }
+}
