@@ -65,6 +65,18 @@ func TestBuildValid(t *testing.T) {
 				"agent.b": {"agent.a", "model.m", "prompt.sys"},
 			},
 		},
+		{
+			name: "agent without system_prompt contributes no prompt edge",
+			dir:  "no_system_prompt",
+			wantOrder: []string{
+				"model.m", "agent.a",
+				"prompt.sys", "agent.b",
+			},
+			wantDeps: map[string][]string{
+				"agent.a": {"model.m"},
+				"agent.b": {"agent.a", "model.m", "prompt.sys"},
+			},
+		},
 	}
 
 	for _, tc := range tests {

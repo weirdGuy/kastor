@@ -1,0 +1,22 @@
+agent "geocoder" {
+  model = model.fast
+
+  input "location" {
+    type = string
+  }
+
+  output "coordinates" {
+    type = string
+  }
+}
+
+agent "weather" {
+  model         = model.fast
+  system_prompt = prompt.sys
+
+  output "weather" {
+    type = string
+  }
+
+  depends_on = [agent.geocoder]
+}

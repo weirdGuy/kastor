@@ -252,7 +252,9 @@ func (m *Module) resolveAgent(a *schema.Agent) []error {
 	}
 
 	check(a.Model)
-	check(a.SystemPrompt)
+	if a.SystemPrompt != "" {
+		check(a.SystemPrompt)
+	}
 	for _, ref := range a.Tools {
 		check(ref)
 	}

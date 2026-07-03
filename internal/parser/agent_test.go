@@ -42,13 +42,25 @@ func TestParseAgentFile(t *testing.T) {
 			},
 		},
 		{
-			name: "minimal agent needs only model and system_prompt",
+			name: "agent with only model and system_prompt",
 			file: "valid_minimal.agent",
 			want: []*schema.Agent{
 				{
 					Name:         "echo",
 					Model:        "model.fast",
 					SystemPrompt: "prompt.echo_system",
+				},
+			},
+		},
+		{
+			name: "system_prompt is optional; absent leaves the reference empty",
+			file: "valid_no_system_prompt.agent",
+			want: []*schema.Agent{
+				{
+					Name:    "geocoder",
+					Model:   "model.fast",
+					Inputs:  []*schema.AgentInput{{Name: "location", Type: "string"}},
+					Outputs: []*schema.AgentOutput{{Name: "coordinates", Type: "string"}},
 				},
 			},
 		},

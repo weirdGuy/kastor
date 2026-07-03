@@ -1,0 +1,11 @@
+agent "geocoder" {
+  model = model.fast
+
+  input "location" {
+    type = string
+  }
+
+  output "coordinates" {
+    type = string
+  }
+}
