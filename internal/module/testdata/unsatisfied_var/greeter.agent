@@ -1,0 +1,12 @@
+agent "greeter" {
+  model         = model.fast
+  system_prompt = prompt.greeter_system
+
+  input "name" {
+    type = string
+  }
+
+  output "greeting" {
+    type = string
+  }
+}

@@ -1,0 +1,5 @@
+---
+name = "greeter_system"
+requires = ["name", "city", "mood"]
+---
+Greet {{name}} from {{city}} in a {{mood}} way.

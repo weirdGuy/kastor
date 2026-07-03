@@ -114,6 +114,14 @@ func TestLoadErrors(t *testing.T) {
 			},
 		},
 		{
+			name: "unsatisfied prompt variables are all reported",
+			dir:  "unsatisfied_var",
+			wantErrs: []string{
+				`greeter.agent: agent.greeter: system_prompt prompt.greeter_system: variable "city" is not an input or output of the agent`,
+				`greeter.agent: agent.greeter: system_prompt prompt.greeter_system: variable "mood" is not an input or output of the agent`,
+			},
+		},
+		{
 			name: "agent declared in two files",
 			dir:  "dup_agent",
 			wantErrs: []string{

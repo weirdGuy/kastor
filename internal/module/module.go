@@ -166,7 +166,9 @@ func (m *Module) loadFile(path, rel string) []error {
 
 // resolveAgent checks every reference captured on an agent against the
 // symbol table. Reference kinds are guaranteed by the parser (model.* for
-// model, etc.), so existence is the only question left.
+// model, etc.), so existence is the only question left. Once the system
+// prompt resolves, its variables are validated against the agent's IO
+// contract.
 func (m *Module) resolveAgent(a *schema.Agent) []error {
 	file := m.symbols[a.Addr()].File
 
@@ -184,6 +186,15 @@ func (m *Module) resolveAgent(a *schema.Agent) []error {
 	}
 	for _, ref := range a.DependsOn {
 		check(ref)
+	}
+
+	// SPEC.md §3.2: every variable the system prompt requires must be
+	// satisfiable from the agent's inputs/outputs. Skipped when the prompt
+	// reference is unknown — that already produced its own error above.
+	if sym, ok := m.symbols[a.SystemPrompt]; ok {
+		for _, err := range schema.ValidatePromptVars(a, sym.Block.(*schema.Prompt)) {
+			errs = append(errs, fmt.Errorf("%s: %w", file, err))
+		}
 	}
 
 	for _, in := range a.Inputs {

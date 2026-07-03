@@ -1,4 +1,6 @@
 ---
 name = "weather_system"
+requires = ["forecast_context"]
 ---
-You are a weather assistant.
+You are a weather assistant. Use this forecast context:
+{{forecast_context}}
