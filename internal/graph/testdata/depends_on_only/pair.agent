@@ -1,0 +1,19 @@
+agent "a" {
+  model         = model.m
+  system_prompt = prompt.sys
+
+  output "x" {
+    type = string
+  }
+}
+
+agent "b" {
+  model         = model.m
+  system_prompt = prompt.sys
+
+  output "y" {
+    type = string
+  }
+
+  depends_on = [agent.a]
+}

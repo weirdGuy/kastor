@@ -1,0 +1,13 @@
+agent "a" {
+  model         = model.m
+  system_prompt = prompt.sys
+
+  input "from_self" {
+    type    = string
+    default = agent.a.output.x
+  }
+
+  output "x" {
+    type = string
+  }
+}

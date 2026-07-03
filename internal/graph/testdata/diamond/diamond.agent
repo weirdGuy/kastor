@@ -1,0 +1,55 @@
+agent "a" {
+  model         = model.m
+  system_prompt = prompt.sys
+
+  output "x" {
+    type = string
+  }
+}
+
+agent "b" {
+  model         = model.m
+  system_prompt = prompt.sys
+
+  input "from_a" {
+    type    = string
+    default = agent.a.output.x
+  }
+
+  output "y" {
+    type = string
+  }
+}
+
+agent "c" {
+  model         = model.m
+  system_prompt = prompt.sys
+
+  input "from_a" {
+    type    = string
+    default = agent.a.output.x
+  }
+
+  output "z" {
+    type = string
+  }
+}
+
+agent "d" {
+  model         = model.m
+  system_prompt = prompt.sys
+
+  input "from_b" {
+    type    = string
+    default = agent.b.output.y
+  }
+
+  input "from_c" {
+    type    = string
+    default = agent.c.output.z
+  }
+
+  output "w" {
+    type = string
+  }
+}
