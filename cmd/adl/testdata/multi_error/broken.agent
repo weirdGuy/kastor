@@ -1,0 +1,4 @@
+agent "broken" {
+  model = model.m
+  this line is not valid HCL {{{
+}

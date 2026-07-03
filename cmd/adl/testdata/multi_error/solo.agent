@@ -1,0 +1,8 @@
+agent "solo" {
+  model         = model.missing
+  system_prompt = prompt.sys
+
+  output "answer" {
+    type = string
+  }
+}

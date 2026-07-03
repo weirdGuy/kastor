@@ -1,0 +1,8 @@
+agent "solo" {
+  model         = model.fastt
+  system_prompt = prompt.sys
+
+  output "answer" {
+    type = string
+  }
+}

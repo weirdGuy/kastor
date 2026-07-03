@@ -1,0 +1,5 @@
+---
+name = "sys"
+requires = ["place"]
+---
+Report the weather for {{place}}.

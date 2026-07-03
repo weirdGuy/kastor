@@ -1,0 +1,14 @@
+agent "weather" {
+  model         = model.fast
+  system_prompt = prompt.sys
+
+  tools = [tool.web_search]
+
+  input "place" {
+    type = string
+  }
+
+  output "report" {
+    type = string
+  }
+}
