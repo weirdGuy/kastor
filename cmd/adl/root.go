@@ -21,8 +21,14 @@ func newRootCmd() *cobra.Command {
 		},
 	}
 
+	// Flag misuse is a usage error (exit 2), like bad positional args.
+	root.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
+		return withExitCode(2, err)
+	})
+
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newValidateCmd())
+	root.AddCommand(newBuildCmd())
 	root.AddCommand(newFmtCmd())
 	return root
 }

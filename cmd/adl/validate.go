@@ -29,26 +29,35 @@ func newValidateCmd() *cobra.Command {
 	}
 }
 
-// runValidate runs the pipeline stages in order: module.Load (parse, symbol
+func runValidate(stdout, stderr io.Writer, dir string) error {
+	mod, _, err := compileModule(stderr, dir)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "Success! Module is valid: %s.\n", moduleSummary(mod))
+	return nil
+}
+
+// compileModule runs the pipeline stages in order: module.Load (parse, symbol
 // table, reference resolution, prompt variable checks — all diagnostics
 // aggregated) then graph.Build (cycle detection). A failed stage stops the
 // run because the next stage needs its output; diagnostics within a stage
-// are always reported in full.
-func runValidate(stdout, stderr io.Writer, dir string) error {
+// are always reported in full to stderr. Both validate and build sit on this
+// — build must never generate from a module that fails it.
+func compileModule(stderr io.Writer, dir string) (*module.Module, *graph.Graph, error) {
 	mod, err := module.Load(dir)
+	var g *graph.Graph
 	if err == nil {
-		_, err = graph.Build(mod)
+		g, err = graph.Build(mod)
 	}
 	if err != nil {
 		lines := flattenDiagnostics(err, dir)
 		for _, line := range lines {
 			fmt.Fprintln(stderr, line)
 		}
-		return fmt.Errorf("validation failed: %s", countNoun(len(lines), "error"))
+		return nil, nil, fmt.Errorf("validation failed: %s", countNoun(len(lines), "error"))
 	}
-
-	fmt.Fprintf(stdout, "Success! Module is valid: %s.\n", moduleSummary(mod))
-	return nil
+	return mod, g, nil
 }
 
 // flattenDiagnostics expands an aggregated pipeline error (errors.Join trees

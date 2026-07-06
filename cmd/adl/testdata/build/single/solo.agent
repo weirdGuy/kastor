@@ -1,0 +1,11 @@
+agent "solo" {
+  model = model.fast
+
+  input "question" {
+    type = string
+  }
+
+  output "answer" {
+    type = string
+  }
+}
