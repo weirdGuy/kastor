@@ -288,3 +288,44 @@ Providers implement a common interface (`Read/Create/Update/Delete/Diff`) — la
 3. `adl plan/apply` with **one** platform provider (pick OpenAI Assistants)
 4. Examples repo: the weather agent end-to-end on both paths
 One codegen target + one provider proves the hybrid thesis. Everything else is expansion.
+
+## 9. Consumers & design constraints
+
+ADL has two consumer classes, in deliberate sequence:
+
+1. **Humans (v0–v1).** Developers hand-writing specs, reading diagnostics,
+   reviewing diffs in PRs. Human ergonomics — readable HCL, `adl fmt`, clear
+   error text, this document — are first-class permanently. Nothing in the
+   AI-consumer direction may regress the human path.
+
+2. **AI agents as the primary consumer (v1+).** The long-term thesis: people
+   build personalized agents *by instructing an AI*, and that AI expresses the
+   result as an ADL module — validated, versioned, diffable, reviewable by a
+   human. ADL is the stable, typed substrate that makes AI-built agents
+   trustworthy rather than ad hoc.
+
+Every design decision is evaluated against both consumers. Concretely, the
+AI-consumer thesis imposes these standing constraints:
+
+- **Diagnostics are machine-readable and self-repair-oriented.** Every error
+  states what was found, what was expected, and where (file:line + block
+  address). A structured output mode (`--json`) is required, not polish:
+  validation errors are the AI's self-correction loop.
+- **The language is versioned.** Modules may declare the spec version they
+  target; parsers reject versions they don't understand rather than
+  misinterpreting them. Syntax changes are additive within a version.
+- **Documentation is generated, not hand-maintained.** The schema structs are
+  the source of truth; reference docs for the syntax derive from them, so an
+  AI reading the docs and the parser enforcing the language can never
+  disagree.
+- **Determinism everywhere** (already a project convention): same input, same
+  output — byte-identical builds, stable ordering, reproducible plans. AI
+  workflows compound nondeterminism; the toolchain must contribute none.
+- **The toolchain itself is agent-operable.** The pipeline behind the CLI is
+  equally exposable via an MCP server (`validate`/`build`/`plan`/`apply` plus
+  schema/introspection tools), so an AI can drive the full lifecycle without
+  shelling out or screen-scraping text output.
+
+Sequencing: these constraints shape decisions from now on, but implementation
+lands after the core thesis is proven (§8 — one codegen target, one platform
+provider). The MCP server and generated docs are v1 milestones, not v0 scope.
