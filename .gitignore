@@ -9,6 +9,13 @@
 # artifacts are not needed to detect drift.
 examples/**/gen/
 
+# Plan/apply state: maps block addresses to remote resource ids —
+# environment-specific like tfstate, never committed. The lock file is
+# transient by design. (State-package test fixtures live in tracked
+# testdata directories and are unaffected by these example-scoped rules.)
+examples/**/adl.state.json
+examples/**/.adl.state.lock
+
 # MCP server connection config: can carry API keys in URLs (hosted
 # endpoints like Tavily embed the key as a query param). Must never be
 # committable by accident.

@@ -1,0 +1,53 @@
+agent "geocoder" {
+  model = model.fast
+
+  input "place" {
+    type = string
+  }
+
+  output "coordinates" {
+    type = string
+  }
+}
+
+agent "forecast" {
+  model = model.fast
+
+  input "coordinates" {
+    type    = string
+    default = agent.geocoder.output.coordinates
+  }
+
+  output "summary" {
+    type = string
+  }
+}
+
+agent "weather" {
+  description   = "Answers weather questions"
+  model         = model.fast
+  system_prompt = prompt.weather_system
+
+  tools = [tool.web_search]
+
+  input "location" {
+    type        = string
+    description = "The location to get the weather for"
+  }
+
+  input "date" {
+    type     = string
+    optional = true
+  }
+
+  input "forecast_context" {
+    type    = string
+    default = agent.forecast.output.summary
+  }
+
+  output "report" {
+    type = string
+  }
+
+  depends_on = [agent.geocoder]
+}

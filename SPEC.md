@@ -245,7 +245,59 @@ target "openai_assistants" {
 | `adl destroy` | Remove managed remote agents |
 | `adl fmt` | Canonical formatting |
  
-State file (`adl.state.json`): maps block addresses → remote resource IDs, tracks last-applied config for drift detection.
+Exit codes (all commands): 0 clean, 1 validation/codegen/plan/apply errors, 2 usage/IO errors (including lock contention).
+
+### 5.1 State file
+
+`adl.state.json`, at the module root, records what `adl apply` manages: block addresses → remote resource IDs, plus the configuration last applied to each.
+
+```json
+{
+  "version": 1,
+  "serial": 4,
+  "targets": {
+    "openai_assistants": {
+      "resources": {
+        "agent.weather": {
+          "id": "asst_abc123",
+          "config": { "model": { "id": "gpt-4o-mini", "provider": "openai" } },
+          "dependencies": ["agent.geocoder"]
+        }
+      }
+    }
+  }
+}
+```
+
+**Rules:**
+- `version` is the state format version. Unknown versions are rejected, never guessed at (same stance as language versioning, §9). `serial` increases by one on every write, ordering snapshots.
+- The **unit of remote management is the agent**: each `agent` block is one resource; its model, prompt, and tools are folded into the resource's config (the "agent closure"). Standalone remote tool/prompt objects are deferred.
+- `config` is the **full last-applied config** (canonical JSON, not a hash) — drift reports can then name the attributes that changed without refetching anything.
+- `dependencies` records the resource's managed (agent) dependencies so a resource that has been removed from the spec can still be destroyed in reverse dependency order — the module graph no longer knows it.
+- Serialization is deterministic: stable key order, byte-identical output for equal state. Writes are atomic (temp file + rename) and happen **after every applied operation**, not once at the end — an interrupted apply loses nothing, and a re-run plans exactly the remainder.
+- Like Terraform state, the file is environment-specific and is not meant to be committed.
+
+**Locking:** plan/apply/destroy take a local lock file (`.adl.state.lock`) for their duration; contention errors name the holding pid and the recovery step (delete the stale file). Remote state backends and remote locking are deferred (§7).
+
+### 5.2 Plan/apply semantics
+
+`adl plan` is a **three-way comparison** — spec vs. state vs. remote — and a **pure read**: it issues only `Read`/`Diff` provider calls and never touches the state file.
+
+Per resource, in the module's topological order (deletes first, in reverse dependency order):
+
+| Situation | Plan |
+|-----------|------|
+| in spec, not in state | create ("not in state") |
+| in state, remote object missing | create ("remote object … missing") + drift warning |
+| in spec and state, remote differs from spec | update, with attribute-level diffs |
+| in spec and state, remote matches | no-op |
+| in state, not in spec | delete ("removed from spec") |
+
+**Drift** (remote changed outside adl) is detected by diffing the *last-applied* config against the remote and reported as a warning naming the changed attributes; apply converges the remote back to the spec. When the user instead edits the spec to match a manual remote change, the plan is a no-op and apply silently refreshes the stale state entry (no remote call), so the warning does not recur.
+
+`adl apply` executes the plan in order and stops at the first failure; everything applied up to that point is already saved in state, and the error states what failed, what had been applied, and — if a resource was created remotely but saving state failed — the remote id, so nothing is orphaned silently. `adl apply` does not prompt for confirmation in v0. `adl destroy` deletes everything in state in reverse dependency order.
+
+Diagnostics from plan/apply are structured (severity, block address, summary, detail) so a machine-readable `--json` rendering (§9) is a renderer, not a redesign.
  
 ---
  
@@ -268,6 +320,16 @@ internal/
 ```
  
 Providers implement a common interface (`Read/Create/Update/Delete/Diff`) — later extractable to a plugin system (go-plugin, like Terraform).
+
+**Provider contract** (`internal/provider`): the engine renders each agent's closure into a neutral, serializable config (a JSON value tree — no core Go types, no provider types), so the interface can move behind a plugin boundary without redesign. Contract rules:
+
+- `Read(id)` reports found=false for a resource deleted outside adl — that is drift data, not an error.
+- `Create(resource)` returns the platform's id; the engine records it in state immediately.
+- `Delete(id)` is idempotent: deleting an already-missing remote object succeeds, so re-runs after partial failures converge.
+- `Diff(desired, remote)` is the comparison authority — only the provider knows how the neutral config maps onto its platform's attributes. Empty result = in sync. The engine also diffs the last-applied config against the remote for drift detection.
+- `Diff` must be pure and deterministic; `Read` must not mutate. `adl plan` issues only these two.
+
+The plan/apply engine is target-agnostic and consumes exactly what `adl validate` assembles (loaded module, dependency graph, topological order) plus the state file — the same shape as the codegen engine's `Generate(job)` contract.
  
 ---
  

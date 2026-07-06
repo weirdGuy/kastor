@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "serial": 7,
+  "targets": {
+    "openai_assistants": {
+      "resources": {
+        "agent.geocoder": {
+          "id": "asst_456",
+          "config": {
+            "model": {
+              "id": "gpt-4o-mini",
+              "provider": "openai"
+            }
+          }
+        },
+        "agent.weather": {
+          "id": "asst_123",
+          "config": {
+            "description": "Answers weather questions",
+            "model": {
+              "id": "gpt-4o-mini",
+              "provider": "openai"
+            }
+          },
+          "dependencies": [
+            "agent.geocoder"
+          ]
+        }
+      }
+    }
+  }
+}

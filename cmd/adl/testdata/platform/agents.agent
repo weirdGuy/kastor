@@ -1,0 +1,24 @@
+agent "geocoder" {
+  model = model.fast
+
+  input "place" {
+    type = string
+  }
+
+  output "coordinates" {
+    type = string
+  }
+}
+
+agent "weather" {
+  model = model.fast
+
+  input "coordinates" {
+    type    = string
+    default = agent.geocoder.output.coordinates
+  }
+
+  output "report" {
+    type = string
+  }
+}
