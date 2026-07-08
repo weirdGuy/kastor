@@ -35,3 +35,22 @@ jobs:
             echo "$unformatted"
             exit 1
           fi
+
+  # Dry-run of the release pipeline so .goreleaser.yaml breakage is caught on
+  # PRs, not while cutting a release. Publishes nothing.
+  release-snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: GoReleaser snapshot
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --snapshot --clean

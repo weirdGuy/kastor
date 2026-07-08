@@ -24,3 +24,6 @@ mcp_servers.json
 # Python artifacts from running generated projects
 **/__pycache__/
 **/.venv/
+
+# GoReleaser output
+dist/

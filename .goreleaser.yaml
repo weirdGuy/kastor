@@ -1,0 +1,78 @@
+# GoReleaser configuration for the kastor CLI.
+# Releases are tag-driven: pushing a v* tag runs .github/workflows/release.yml,
+# which runs the test suite and then `goreleaser release`.
+version: 2
+
+project_name: kastor
+
+builds:
+  - id: kastor
+    main: ./cmd/kastor
+    binary: kastor
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    # cmd/kastor/root.go defines exactly one build-time variable: main.version.
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - formats: ["tar.gz"]
+    format_overrides:
+      - goos: windows
+        formats: ["zip"]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^chore"
+      - "^docs"
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: Other changes
+      order: 999
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+brews:
+  - name: kastor
+    repository:
+      owner: weirdGuy
+      name: homebrew-tap
+      # envOrDefault instead of .Env.X: goreleaser templates error on missing
+      # env keys, and TAP_GITHUB_TOKEN may not exist as a secret yet.
+      token: '{{ envOrDefault "TAP_GITHUB_TOKEN" "" }}'
+    # No token → skip pushing the formula instead of failing the release.
+    skip_upload: '{{ if eq (envOrDefault "TAP_GITHUB_TOKEN" "") "" }}true{{ else }}false{{ end }}'
+    directory: Formula
+    homepage: "https://github.com/weirdGuy/kastor"
+    description: "Terraform for AI agents — declarative agent specs in HCL"
+    license: "Apache-2.0"
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    test: |
+      system "#{bin}/kastor version"
+    install: |
+      bin.install "kastor"
