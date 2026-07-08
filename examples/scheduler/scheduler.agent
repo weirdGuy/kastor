@@ -1,0 +1,29 @@
+agent "scheduler" {
+  description = "Takes a batch of social posts and schedules them into the Typefully queue"
+
+  model         = model.fast
+  system_prompt = prompt.scheduler_system
+
+  tools = [tool.create_draft]
+
+  input "posts" {
+    type        = string
+    description = "The posts to schedule. Separate posts with a line containing only '---'. (v0 types are scalars only, so the batch travels as one string.)"
+  }
+
+  input "today" {
+    type        = string
+    description = "Today's date in ISO format, e.g. 2026-07-08. Needed so the model can compute concrete schedule_date values."
+  }
+
+  input "schedule_preferences" {
+    type        = string
+    optional    = true
+    default     = "spread the posts over the coming week, weekday mornings around 09:00 UTC, at most one post per day, keep similar topics apart"
+    description = "Plain-language instructions for how to spread the posts"
+  }
+
+  output "schedule_summary" {
+    type = string
+  }
+}
