@@ -1,18 +1,18 @@
 // Package providertest provides an in-memory Provider for testing the
 // plan/apply engine and CLI without a real platform (mirroring buildtest
 // for the codegen engine). Its remote objects are stored verbatim as the
-// desired configs that created them, so its Diff is a generic structural
-// comparison over the JSON value model.
+// desired configs that created them, and its Diff delegates to the shipped
+// memory provider's structural comparison, so the fake and the real
+// in-memory platform can never disagree.
 package providertest
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
-	"sort"
 
 	"github.com/weirdGuy/kastor/internal/provider"
+	"github.com/weirdGuy/kastor/internal/provider/memory"
 )
 
 // Fake is an in-memory provider.Provider. Zero-configuration tests just
@@ -91,74 +91,15 @@ func (f *Fake) Delete(_ context.Context, id string) error {
 	return nil
 }
 
-// Diff implements provider.Provider with a generic structural comparison:
-// maps diff by sorted key union, same-length arrays element-wise, anything
-// else as a leaf. Old is the remote value, New the desired one.
+// Diff implements provider.Provider by delegating to the memory provider's
+// structural comparison (maps by sorted key union, same-length arrays
+// element-wise, anything else as a leaf; Old is the remote value, New the
+// desired one).
 func (f *Fake) Diff(desired *provider.Resource, remote provider.Object) ([]provider.AttrDiff, error) {
 	if err := f.call("diff", desired.Addr); err != nil {
 		return nil, err
 	}
-	var diffs []provider.AttrDiff
-	diffValue("", desired.Config, remote, &diffs)
-	return diffs, nil
-}
-
-// diffValue appends the differences between desired and remote at path.
-func diffValue(path string, desired, remote any, out *[]provider.AttrDiff) {
-	switch d := desired.(type) {
-	case map[string]any:
-		r, ok := remote.(map[string]any)
-		if !ok {
-			appendLeaf(path, desired, remote, out)
-			return
-		}
-		keys := map[string]bool{}
-		for k := range d {
-			keys[k] = true
-		}
-		for k := range r {
-			keys[k] = true
-		}
-		sorted := make([]string, 0, len(keys))
-		for k := range keys {
-			sorted = append(sorted, k)
-		}
-		sort.Strings(sorted)
-		for _, k := range sorted {
-			dv, inD := d[k]
-			rv, inR := r[k]
-			sub := k
-			if path != "" {
-				sub = path + "." + k
-			}
-			switch {
-			case !inR:
-				*out = append(*out, provider.AttrDiff{Path: sub, Old: nil, New: dv})
-			case !inD:
-				*out = append(*out, provider.AttrDiff{Path: sub, Old: rv, New: nil})
-			default:
-				diffValue(sub, dv, rv, out)
-			}
-		}
-	case []any:
-		r, ok := remote.([]any)
-		if !ok || len(r) != len(d) {
-			appendLeaf(path, desired, remote, out)
-			return
-		}
-		for i := range d {
-			diffValue(fmt.Sprintf("%s[%d]", path, i), d[i], r[i], out)
-		}
-	default:
-		appendLeaf(path, desired, remote, out)
-	}
-}
-
-// appendLeaf records a leaf-level difference, if there is one.
-func appendLeaf(path string, desired, remote any, out *[]provider.AttrDiff) {
-	if !reflect.DeepEqual(desired, remote) {
-		*out = append(*out, provider.AttrDiff{Path: path, Old: remote, New: desired})
-	}
+	return memory.DiffObjects(desired.Config, remote), nil
 }
 
 // deepCopy clones a JSON value tree so the fake's store never shares
