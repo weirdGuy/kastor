@@ -160,6 +160,31 @@ func TestPlanApplyDestroyEndToEnd(t *testing.T) {
 	}
 }
 
+// TestPlanWeatherExample is the issue #17 acceptance: a bare kastor plan on
+// examples/weather must produce a clean first plan against the built-in
+// memory platform — this output is the README demo. No fake registration:
+// it exercises the provider registry the shipped binary uses.
+func TestPlanWeatherExample(t *testing.T) {
+	dir := copyModule(t, filepath.Join("..", "..", "examples", "weather"))
+	out, err := runCLI(t, "plan", dir)
+	if err != nil {
+		t.Fatalf("plan: %v\n%s", err, out)
+	}
+	for _, want := range []string{
+		"+ agent.forecast (not in state)",
+		"+ agent.geocoder (not in state)",
+		"+ agent.weather (not in state)",
+		"Plan for target.memory: 3 to create, 0 to update, 0 to delete, 0 unchanged.",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("plan output missing %q:\n%s", want, out)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, state.Filename)); !os.IsNotExist(err) {
+		t.Error("plan created a state file — plan must be a pure read")
+	}
+}
+
 func TestPlatformCommandErrors(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -196,6 +221,13 @@ func TestPlatformCommandErrors(t *testing.T) {
 			dir:      "testdata/platform_no_provider",
 			wantCode: 1,
 			wantOut:  []string{"target.openai_assistants", "no platform provider"},
+		},
+		{
+			name:     "memory target rejects auth",
+			args:     []string{"plan"},
+			dir:      "testdata/platform_memory_auth",
+			wantCode: 1,
+			wantOut:  []string{"target.memory", "auth block found", "in-memory platform takes no credentials"},
 		},
 		{
 			name:     "invalid module never plans",

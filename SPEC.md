@@ -221,6 +221,8 @@ target "openai_assistants" {
 - `codegen` targets require `output` and do not allow `auth`.
 - `platform` targets do not allow `output`; `auth` is optional (ambient credentials — env vars, instance roles — are the common case).
 - Fields that are meaningless for a target's type are errors, not ignored (configs rot through silent acceptance).
+- **A platform target's label selects its provider implementation**, exactly as a codegen target's label selects its generator: `target "openai_assistants"` binds to the OpenAI Assistants reconciler, `target "memory"` to the built-in in-memory platform. A label with no registered provider is an error naming the available providers. (A separate `provider` attribute is deliberately deferred until something forces it — e.g. two targets on the same platform kind in one module.)
+- The `memory` platform is built in: an **ephemeral in-memory store** so plan/apply can be demonstrated and exercised — examples, onboarding, CI — with no credentials and no network. `auth` on it is an error (meaningless fields, again). Its remote objects die with the process, so a later invocation's plan truthfully reports previously applied resources as remote-missing drift.
  
 ---
  
@@ -295,6 +297,8 @@ Per resource, in the module's topological order (deletes first, in reverse depen
 
 **Drift** (remote changed outside kastor) is detected by diffing the *last-applied* config against the remote and reported as a warning naming the changed attributes; apply converges the remote back to the spec. When the user instead edits the spec to match a manual remote change, the plan is a no-op and apply silently refreshes the stale state entry (no remote call), so the warning does not recur.
 
+**Plan output.** One line per pending change, in execution order: `+` create, `~` update, `-` delete, with the reason in parentheses on creates and deletes, and one indented `path: old → new` line per attribute diff under updates (values render as compact JSON, truncated so a prompt body cannot flood the plan). An attribute diff is `{path, old, new}` with dotted paths (`model.id`, `tools[0].source.uri`); `old` is null when an attribute is being added, `new` null when it is being removed. Warnings precede the summary. The summary line is countable and per-target — `Plan for target.<name>: N to create, M to update, K to delete, J unchanged.` — or `No changes for target.<name>: remote matches the spec (N resources).` when nothing is pending. The whole plan (target, ordered changes, attribute diffs, diagnostics) is one serializable tree, so the `--json` rendering (§9) is a second renderer over the same data, not a second pipeline.
+
 `kastor apply` executes the plan in order and stops at the first failure; everything applied up to that point is already saved in state, and the error states what failed, what had been applied, and — if a resource was created remotely but saving state failed — the remote id, so nothing is orphaned silently. `kastor apply` does not prompt for confirmation in v0. `kastor destroy` deletes everything in state in reverse dependency order.
 
 Diagnostics from plan/apply are structured (severity, block address, summary, detail) so a machine-readable `--json` rendering (§9) is a renderer, not a redesign.
@@ -314,6 +318,7 @@ internal/
     langgraph/      target: LangGraph (Python)
     crewai/         target: CrewAI (Python)
   provider/         platform reconcilers
+    memory/         built-in in-memory platform (demos, examples, CI)
     openai/         OpenAI Assistants API
     bedrock/        AWS Bedrock Agents
   state/            state file read/write, locking, diff

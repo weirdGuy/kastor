@@ -12,12 +12,11 @@ Working today:
 - parse `.agent`, `.tool`, `.prompt`, and `kastor.hcl`
 - validate references and prompt variables
 - build runnable LangGraph projects
+- `kastor plan` / `kastor apply` / `kastor destroy` against the built-in in-memory platform — local state file, three-way diffs, drift detection
 - examples: [weather agent](https://github.com/weirdGuy/kastor/tree/main/examples/weather), [content scheduler](https://github.com/weirdGuy/kastor/tree/main/examples/scheduler) agent
 
 Planned for v0:
-- `kastor plan/apply`
-- local state file and drift detection
-- Deploy to aws/azure platforms.
+- hosted platform providers (OpenAI Assistants first, then AWS/Azure)
 
 _This is not another agent runtime/framework._
 
@@ -48,6 +47,19 @@ agent "weather" {
   }
 }
 ```
+
+And `kastor plan` shows what `kastor apply` would change on a platform target — a three-way comparison of the spec, the state file, and the remote platform. The weather example targets the built-in in-memory platform, so it works with no credentials:
+
+```console
+$ kastor plan examples/weather/
+  + agent.forecast (not in state)
+  + agent.geocoder (not in state)
+  + agent.weather (not in state)
+
+Plan for target.memory: 3 to create, 0 to update, 0 to delete, 0 unchanged.
+```
+
+Plan is a pure read — it never touches remote resources or the state file. Updates show attribute-level diffs, and out-of-band remote changes surface as drift warnings.
 
 ## Install
 

@@ -14,11 +14,9 @@ target "langgraph" {
   output = "./gen/langgraph"
 }
 
-# Platform target with explicit auth (also valid without auth: ambient credentials)
-target "openai_assistants" {
+# Platform target -> `kastor plan` / `kastor apply` against the built-in
+# ephemeral in-memory platform: no credentials, no network. Swap for a real
+# platform target (e.g. "openai_assistants", issue #16) once one ships.
+target "memory" {
   type = "platform"
-
-  auth {
-    api_key_env = "OPENAI_API_KEY"
-  }
 }

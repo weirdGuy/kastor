@@ -8,6 +8,7 @@ import (
 
 	"github.com/weirdGuy/kastor/internal/module"
 	"github.com/weirdGuy/kastor/internal/provider"
+	"github.com/weirdGuy/kastor/internal/provider/memory"
 	"github.com/weirdGuy/kastor/internal/schema"
 	"github.com/weirdGuy/kastor/internal/state"
 )
@@ -16,7 +17,9 @@ import (
 // the target label doubles as the provider selector, exactly like codegen
 // target names select generators (see cmd/kastor/build.go). Issue #16
 // registers "openai_assistants" here.
-var providerFactories = map[string]func(*schema.Target) (provider.Provider, error){}
+var providerFactories = map[string]func(*schema.Target) (provider.Provider, error){
+	"memory": memory.Factory,
+}
 
 // platformJob is one reconcile unit: a platform target with its resolved
 // provider, sharing the module, graph, and state with its siblings.
