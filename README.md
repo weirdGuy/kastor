@@ -21,6 +21,34 @@ Planned for v0:
 
 _This is not another agent runtime/framework._
 
+## Example
+
+An agent in Kastor is a small declarative spec:
+
+```hcl
+agent "weather" {
+  description = "Answers weather questions for a location and date"
+
+  model         = model.fast
+  system_prompt = prompt.weather_system
+  tools         = [tool.web_search]
+
+  input "location" {
+    type        = string
+    description = "The location to get weather for"
+  }
+
+  input "date" {
+    type     = string
+    optional = true
+  }
+
+  output "weather" {
+    type = string
+  }
+}
+```
+
 ## Install
 
 Homebrew:
