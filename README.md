@@ -4,6 +4,28 @@ Kastor is "Terraform for AI agents." Agents today are defined imperatively insid
 
 The full design lives in [SPEC.md](SPEC.md).
 
+## Install
+
+Homebrew:
+
+```sh
+brew tap weirdGuy/tap && brew install kastor
+```
+
+Install script (verifies the release checksum, installs to `/usr/local/bin` or `~/.local/bin`, never sudo):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/weirdGuy/kastor/main/scripts/install.sh | sh
+```
+
+With Go 1.26+:
+
+```sh
+go install github.com/weirdGuy/kastor/cmd/kastor@latest
+```
+
+Or download an archive for your platform from the [releases page](https://github.com/weirdGuy/kastor/releases), verify it against `checksums.txt`, and put the `kastor` binary on your PATH.
+
 ## Quickstart: build the weather example
 
 Prerequisites: Go 1.26+, Python 3.11+, an OpenAI API key, and a [Tavily](https://tavily.com) API key (the example's search tool runs against Tavily's hosted MCP server).

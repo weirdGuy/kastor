@@ -57,3 +57,7 @@ gofmt -l .                     # formatting check (must be clean)
 - `kastor validate` must stay fast — it runs on every save in editor integrations later
 - When adding a block field: update schema struct → validation → parser test fixtures → SPEC.md if it's a design change
 - Before claiming a milestone or feature is code complete, attempt its acceptance command (e.g. `kastor validate` / `kastor build` on the examples) and confirm the output — passing tests alone don't count
+
+## Releases
+
+Tag-driven: pushing a `v*` tag runs `.github/workflows/release.yml`, which runs the full test suite and then GoReleaser (`.goreleaser.yaml`) — six platform/arch binaries, archives, `checksums.txt`, grouped changelog, GitHub release, and (only if the `TAP_GITHUB_TOKEN` secret exists) a Homebrew formula push to `weirdGuy/homebrew-tap`. CI dry-runs the config on every PR via `goreleaser release --snapshot --clean`, so validate release changes there — never by pushing a tag. The version string is injected into `main.version` via ldflags; `scripts/install.sh` depends on the archive naming template, keep them in sync.
