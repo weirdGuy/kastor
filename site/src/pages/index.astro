@@ -1,0 +1,317 @@
+---
+import "../styles/global.css";
+
+const title = "Kastor — Terraform-style specs for AI agents";
+const description =
+  "Kastor is an open-source source-of-truth layer for AI agents: define agents, tools, prompts, models, and targets in HCL, validate them, and compile to frameworks like LangGraph.";
+const canonical = "https://www.getkastor.dev/";
+const repoUrl = "https://github.com/weirdGuy/kastor";
+const discordUrl = "https://discord.gg/bb4UwtJFe";
+const quickstartUrl = "https://github.com/weirdGuy/kastor#quickstart-no-credentials-required";
+const hclSnippet = `agent "weather" {
+  description = "Answers weather questions for a location and date"
+
+  model         = model.fast
+  system_prompt = prompt.weather_system
+  tools         = [tool.web_search]
+
+  input "location" {
+    type        = string
+    description = "The location to get weather for"
+  }
+
+  input "date" {
+    type     = string
+    optional = true
+  }
+
+  output "weather" {
+    type = string
+  }
+}`;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:site_name" content="Kastor" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header">
+        <div class="container nav">
+          <a class="brand" href="/" aria-label="Kastor home">
+            <span class="brand-mark">k</span>
+            <span>Kastor</span>
+          </a>
+          <nav class="nav-links" aria-label="Primary">
+            <a href="#status">Status</a>
+            <a href="#demo">Demo</a>
+            <a href="#example">Example</a>
+            <a href="#roadmap">Roadmap</a>
+            <a href={repoUrl}>GitHub</a>
+            <a href={discordUrl}>Discord</a>
+          </nav>
+        </div>
+      </header>
+
+      <main>
+        <section class="hero">
+          <div class="container hero-grid">
+            <div>
+              <p class="eyebrow">Open source AI toolchain</p>
+              <h1>Kastor is a <br>source-of-truth layer <br>for AI agents.</h1>
+              <p class="hero-copy">
+                Define agents, tools, prompts, models, and targets in HCL. Validate the spec.
+                Compile it to runnable framework code. Later, reconcile hosted agents with
+                Terraform-style plan/apply/state.
+              </p>
+              <div class="actions">
+                <a class="button primary" href={repoUrl}>View on GitHub</a>
+                <a class="button" href={quickstartUrl}>Read the quickstart</a>
+              </div>
+            </div>
+
+            <div class="terminal" aria-label="Kastor command preview">
+              <div class="terminal-bar">
+                <div class="dots" aria-hidden="true">
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                </div>
+                <span>examples/weather</span>
+              </div>
+              <pre><code><span class="cmd">$ kastor validate examples/weather</span>
+ok: 3 agents, 1 tool, 2 prompts
+
+<span class="cmd">$ kastor build examples/weather</span>
+wrote gen/langgraph
+
+<span class="cmd">$ kastor plan examples/weather</span>
+  + agent.forecast
+  + agent.geocoder
+  + agent.weather
+
+Plan for target.memory:
+3 to create, 0 to update, 0 to delete</code></pre>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="status">
+          <div class="container">
+            <div class="section-header">
+              <p class="section-kicker">Status</p>
+              <h2>Early proof of concept, with a working local loop.</h2>
+              <p class="lead">
+                Kastor is not a hosted service yet. Today it is a small compiler and reconciler
+                that makes the agent contract explicit before runtime code appears.
+              </p>
+            </div>
+            <div class="split">
+              <div class="panel">
+                <h3><span class="status-dot"></span>Working today</h3>
+                <ul class="check-list">
+                  <li>parse <code>.agent</code>, <code>.tool</code>, <code>.prompt</code>, and <code>kastor.hcl</code></li>
+                  <li>validate references and prompt variables</li>
+                  <li>build runnable LangGraph projects</li>
+                  <li>run <code>kastor plan</code> / <code>kastor apply</code> / <code>kastor destroy</code> against the built-in in-memory platform</li>
+                  <li>local state file, three-way diffs, and drift detection</li>
+                  <li>examples: weather agent and content scheduler</li>
+                </ul>
+              </div>
+              <div class="panel">
+                <h3><span class="status-dot planned"></span>Planned</h3>
+                <ul class="check-list">
+                  <li>hosted platform providers</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="demo">
+          <div class="container">
+            <div class="section-header">
+              <p class="section-kicker">Demo</p>
+              <h2>From HCL files to generated agent code.</h2>
+            </div>
+            <div class="video-shell">
+              <div class="video-frame">
+                <video controls muted playsinline preload="metadata">
+                  <source src="/demo.mp4" type="video/mp4" />
+                  Demo video placeholder: from HCL agent spec to runnable LangGraph project.
+                </video>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="how">
+          <div class="container">
+            <div class="section-header">
+              <p class="section-kicker">How it works</p>
+              <h2>One module, two output paths.</h2>
+            </div>
+            <div class="flow" aria-label="Kastor workflow">
+              <div class="flow-node">
+                <div class="flow-label">1. Module</div>
+                <div class="flow-main">.agent + .tool + .prompt + kastor.hcl</div>
+              </div>
+              <div class="arrow" aria-hidden="true">↓</div>
+              <div class="flow-node">
+                <div class="flow-label">2. Validate</div>
+                <div class="flow-main">kastor validate</div>
+              </div>
+              <div class="arrow" aria-hidden="true">↓</div>
+              <div class="branches">
+                <div class="branch-label">3. Choose an output path</div>
+                <div class="mini-node">
+                  <strong>kastor build</strong>
+                  <span>LangGraph project</span>
+                </div>
+                <div class="mini-node">
+                  <strong>kastor plan/apply</strong>
+                  <span>hosted agents</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="example">
+          <div class="container">
+            <div class="section-header">
+              <p class="section-kicker">Example HCL</p>
+              <h2>The agent contract lives in the spec.</h2>
+            </div>
+            <div class="code-panel">
+              <div class="terminal-bar">
+                <span>weather.agent</span>
+                <span>source of truth</span>
+              </div>
+              <pre><code>{hclSnippet}</code></pre>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="why">
+          <div class="container">
+            <div class="section-header">
+              <p class="section-kicker">Why Kastor</p>
+              <h2>Agent systems need a reviewable contract.</h2>
+              <p class="lead">
+                Agents often end up split across framework code, prompt files, tool glue,
+                platform UI settings, and environment configuration. Kastor's bet is that
+                agents need a versionable, reviewable, declarative contract before they become
+                serious software.
+              </p>
+            </div>
+            <div class="features">
+              <div class="feature">
+                <h3>Typed surface</h3>
+                <p>Inputs, outputs, prompts, tools, models, and targets become explicit declarations.</p>
+              </div>
+              <div class="feature">
+                <h3>Validation first</h3>
+                <p>References and prompt variables fail before generated code or hosted resources drift.</p>
+              </div>
+              <div class="feature">
+                <h3>Generated output</h3>
+                <p>The generated code is an output; the Kastor spec remains the source of truth.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="not-runtime">
+          <div class="container">
+              <h2>What Kastor is not</h2>
+              <p class="lead">
+                Kastor is not an agent runtime. Frameworks like LangGraph still execute agents.
+                Hosted platforms still run managed agents. Kastor sits above them as the
+                declarative source-of-truth layer.
+              </p>
+          </div>
+        </section>
+
+        <section class="section" id="why-not-terraform">
+          <div class="container">
+            <div class="section-header">
+              <p class="section-kicker">Why not Terraform?</p>
+              <h2>Kastor starts at the spec, before remote resources.</h2>
+              <p class="lead">
+                Terraform is great for managing remote resources. A Terraform provider for hosted
+                agents may make sense later. Kastor starts one layer earlier: the agent spec itself.
+                The same Kastor module should be able to generate runnable framework code with
+                {" "}<code>kastor build</code>{" "}or reconcile hosted platform agents with
+                {" "}<code>kastor plan</code> / <code>kastor apply</code>.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="why-not-langgraph">
+          <div class="container">
+            <div class="section-header">
+              <p class="section-kicker">Why not just LangGraph?</p>
+              <h2>LangGraph runs agents. Kastor defines them.</h2>
+              <p class="lead">
+                LangGraph is a runtime/framework. Kastor is not trying to replace it. Kastor
+                defines the agent contract and can generate a LangGraph project from that spec.
+                The generated code is an output; the Kastor module is the source of truth.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="roadmap">
+          <div class="container roadmap">
+            <div>
+              <p class="section-kicker">Roadmap</p>
+              <h2>Next work is practical and toolchain-shaped.</h2>
+            </div>
+            <div class="roadmap-item">
+              <ul class="roadmap-list">
+                <li>polish LangGraph codegen ergonomics</li>
+                <li>hosted OpenAI Assistants provider</li>
+                <li>better language reference docs</li>
+                <li>more real-world examples</li>
+                <li>eventually: generated docs and MCP/server interface for agent-operated workflows</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section class="section final">
+          <div class="container final-panel">
+            <div>
+              <p class="section-kicker">Get involved</p>
+              <h2>Follow the project on GitHub.</h2>
+              <p>Kastor is early, open-source, and built from the design in the repository.</p>
+            </div>
+            <a class="button primary" href={repoUrl}>Follow the project on GitHub</a>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <div class="container">Kastor is open source. Spec first, generated output second.</div>
+      </footer>
+    </div>
+  </body>
+</html>
