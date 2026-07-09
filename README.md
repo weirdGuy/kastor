@@ -35,7 +35,7 @@ Kastor is **not** an agent runtime.
 
 ## Demo
 
-![Kastor building the agent from files](./docs/assets/demo-1.webm)
+![Kastor building the agent from files](./docs/assets/demo-1.gif)
 
 ## How it works
 
