@@ -27,3 +27,6 @@ mcp_servers.json
 
 # GoReleaser output
 dist/
+
+# system stuff
+.DS_Store
