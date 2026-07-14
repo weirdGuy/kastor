@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/weirdGuy/kastor/internal/state"
 )
 
 // runBuildCmd executes "kastor build <args>" and returns combined output and
@@ -31,14 +33,89 @@ func runBuildCmd(t *testing.T, args ...string) (string, error) {
 }
 
 // copyModule copies a testdata module into a temp directory so builds never
-// write generated output into the repository.
+// write generated output into the repository. Only module source is copied;
+// developer-local artifacts — generated output (gen/), plan/apply state,
+// and hidden entries like a .venv — are not test input, and tests must see
+// exactly what their own commands produce.
 func copyModule(t *testing.T, src string) string {
 	t.Helper()
 	dst := t.TempDir()
-	if err := os.CopyFS(dst, os.DirFS(src)); err != nil {
+	err := filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		if strings.HasPrefix(d.Name(), ".") && rel != "." {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.IsDir() {
+			if d.Name() == "gen" {
+				return filepath.SkipDir
+			}
+			return os.MkdirAll(filepath.Join(dst, rel), 0o755)
+		}
+		if d.Name() == state.Filename {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(dst, rel), data, 0o644)
+	})
+	if err != nil {
 		t.Fatalf("copying %s: %v", src, err)
 	}
 	return dst
+}
+
+// countVisibleFiles counts the files in dir that a build accounts for,
+// mirroring build.Write's ownership rule: hidden (dot-prefixed) entries —
+// and everything beneath a hidden directory — belong to the user, not to
+// the build, and are excluded.
+func countVisibleFiles(t *testing.T, dir string) int {
+	t.Helper()
+	var n int
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if strings.HasPrefix(d.Name(), ".") && path != dir {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !d.IsDir() {
+			n++
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking output dir %s: %v", dir, err)
+	}
+	return n
+}
+
+// reportedFileCount extracts N from the "Built target langgraph: N files"
+// success line.
+func reportedFileCount(t *testing.T, out string) int {
+	t.Helper()
+	m := regexp.MustCompile(`Built target langgraph: (\d+) files → `).FindStringSubmatch(out)
+	if m == nil {
+		t.Fatalf("output missing countable success line:\n%s", out)
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil {
+		t.Fatalf("parsing file count %q: %v", m[1], err)
+	}
+	return n
 }
 
 func TestBuildCommandErrors(t *testing.T) {
@@ -166,11 +243,7 @@ func TestBuildCommandWeatherExample(t *testing.T) {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out)
 	}
 
-	m := regexp.MustCompile(`Built target langgraph: (\d+) files → `).FindStringSubmatch(out)
-	if m == nil {
-		t.Fatalf("output missing countable success line:\n%s", out)
-	}
-	reported, _ := strconv.Atoi(m[1])
+	reported := reportedFileCount(t, out)
 
 	outDir := filepath.Join(dir, "gen", "langgraph")
 	for _, f := range []string{
@@ -187,22 +260,50 @@ func TestBuildCommandWeatherExample(t *testing.T) {
 	}
 
 	// Every visible file in the output dir must be accounted for by the
-	// reported count (the marker is hidden and excluded).
-	var onDisk int
-	err = filepath.WalkDir(outDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() && !strings.HasPrefix(d.Name(), ".") {
-			onDisk++
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("walking output dir: %v", err)
-	}
-	if reported != onDisk {
+	// reported count (hidden entries are the user's and excluded).
+	if onDisk := countVisibleFiles(t, outDir); reported != onDisk {
 		t.Errorf("reported %d files, found %d on disk", reported, onDisk)
+	}
+}
+
+// TestBuildCommandCountIgnoresUserArtifacts guards the count assertion
+// against user-owned state in the output directory (KAS-35): artifacts
+// planted under a hidden directory (a .venv) must not change the counted
+// total, and a rebuild over them must succeed, leave them in place, and
+// still report a matching count.
+func TestBuildCommandCountIgnoresUserArtifacts(t *testing.T) {
+	dir := copyModule(t, "testdata/build/single")
+	out, err := runBuildCmd(t, dir, "--target", "langgraph")
+	if err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out)
+	}
+	outDir := filepath.Join(dir, "gen", "langgraph")
+	base := countVisibleFiles(t, outDir)
+
+	dummy := filepath.Join(outDir, ".venv", "dummy")
+	if err := os.MkdirAll(filepath.Dir(dummy), 0o755); err != nil {
+		t.Fatalf("planting .venv: %v", err)
+	}
+	if err := os.WriteFile(dummy, []byte("local artifact\n"), 0o644); err != nil {
+		t.Fatalf("planting %s: %v", dummy, err)
+	}
+
+	if got := countVisibleFiles(t, outDir); got != base {
+		t.Errorf("count after planting .venv/dummy = %d, want %d", got, base)
+	}
+
+	out, err = runBuildCmd(t, dir, "--target", "langgraph")
+	if err != nil {
+		t.Fatalf("rebuild Execute() error = %v\noutput:\n%s", err, out)
+	}
+	if reported := reportedFileCount(t, out); reported != base {
+		t.Errorf("rebuild reported %d files, want %d", reported, base)
+	}
+	if got := countVisibleFiles(t, outDir); got != base {
+		t.Errorf("count after rebuild = %d, want %d", got, base)
+	}
+	if _, err := os.Stat(dummy); err != nil {
+		t.Errorf("planted user artifact must survive a rebuild: %v", err)
 	}
 }
 
