@@ -79,11 +79,15 @@ homebrew_casks:
     repository:
       owner: weirdGuy
       name: homebrew-tap
-      # envOrDefault instead of .Env.X: goreleaser templates error on missing
-      # env keys, and TAP_GITHUB_TOKEN may not exist as a secret yet.
-      token: '{{ envOrDefault "TAP_GITHUB_TOKEN" "" }}'
+      # `index .Env` instead of .Env.X: plain field access errors on missing
+      # env keys, and TAP_GITHUB_TOKEN may be unset (local runs, forks).
+      # Only Go template builtins here — publish-stage templates like this one
+      # are NOT evaluated by `goreleaser check` or the snapshot dry-run, so a
+      # bad function name only surfaces during a real release (v0.1.0 failed
+      # on the non-existent `envOrDefault`).
+      token: '{{ if index .Env "TAP_GITHUB_TOKEN" }}{{ .Env.TAP_GITHUB_TOKEN }}{{ end }}'
     # No token → skip pushing the cask instead of failing the release.
-    skip_upload: '{{ if eq (envOrDefault "TAP_GITHUB_TOKEN" "") "" }}true{{ else }}false{{ end }}'
+    skip_upload: '{{ if index .Env "TAP_GITHUB_TOKEN" }}false{{ else }}true{{ end }}'
     directory: Casks
     homepage: "https://github.com/weirdGuy/kastor"
     description: "Terraform for AI agents — declarative agent specs in HCL"
