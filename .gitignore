@@ -18,8 +18,11 @@ examples/**/.kastor.state.lock
 
 # MCP server connection config: can carry API keys in URLs (hosted
 # endpoints like Tavily embed the key as a query param). Must never be
-# committable by accident.
+# committable by accident. The `kastor init` scaffold's copy is the one
+# exception: it holds no credentials (local stdio server) and must be
+# tracked — go:embed bakes it into the binary.
 mcp_servers.json
+!cmd/kastor/scaffold/**/mcp_servers.json
 
 # Python artifacts from running generated projects
 **/__pycache__/

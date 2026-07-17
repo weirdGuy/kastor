@@ -1,0 +1,7 @@
+{
+  "fetch": {
+    "transport": "stdio",
+    "command": "uvx",
+    "args": ["mcp-server-fetch"]
+  }
+}
