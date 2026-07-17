@@ -103,13 +103,16 @@ const hclSnippet = `agent "weather" {
                   <span class="dot"></span>
                   <span class="dot"></span>
                 </div>
-                <span>examples/weather</span>
+                <span>~/kastor</span>
               </div>
-              <pre><code><span class="cmd">$ kastor validate examples/weather</span>
-ok: 3 agents, 1 tool, 2 prompts
+              <pre><code><span class="cmd">$ kastor init demo</span>
+scaffolded 6 files, ready to build
 
-<span class="cmd">$ kastor build examples/weather</span>
-wrote gen/langgraph
+<span class="cmd">$ kastor validate demo</span>
+ok: 1 agent, 1 tool, 1 prompt
+
+<span class="cmd">$ kastor build demo</span>
+wrote demo/gen/langgraph
 
 <span class="cmd">$ kastor plan examples/weather</span>
   + agent.forecast
@@ -136,6 +139,7 @@ Plan for target.memory:
               <div class="panel">
                 <h3><span class="status-dot"></span>Working today</h3>
                 <ul class="check-list">
+                  <li>scaffold a new module with <code>kastor init</code></li>
                   <li>parse <code>.agent</code>, <code>.tool</code>, <code>.prompt</code>, and <code>kastor.hcl</code></li>
                   <li>validate references and prompt variables</li>
                   <li>build runnable LangGraph projects</li>

@@ -1,0 +1,17 @@
+agent "researcher" {
+  description = "Answers a question by reading web pages fetched over MCP"
+
+  model         = model.fast
+  system_prompt = prompt.researcher_system
+
+  tools = [tool.fetch_url]
+
+  input "question" {
+    type        = string
+    description = "The question to research"
+  }
+
+  output "answer" {
+    type = string
+  }
+}

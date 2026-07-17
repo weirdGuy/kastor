@@ -13,6 +13,7 @@ It validates the weather example, generates LangGraph code, and shows the platfo
 - Python 3.11\+ if you want to run generated LangGraph code
 - An OpenAI API key if you want the generated weather agent to call the configured `openai` model
 - A Tavily API key if you want to run the example MCP web-search tool against Tavily
+- [`uvx`](https://docs.astral.sh/uv/) if you want to run the MCP fetch tool in the `kastor init` scaffold
 
 <Note>
   The docs below do not assume Homebrew, npm, or another package-manager install. If a release package exists for your platform, the repository README may document it separately.
@@ -38,6 +39,29 @@ It validates the weather example, generates LangGraph code, and shows the platfo
     ```
   </Step>
 </Steps>
+
+## Scaffold your own module
+
+`kastor init` writes a minimal working module — one agent, one MCP tool, one prompt, a model, and a LangGraph codegen target:
+
+```bash
+./kastor init demo
+./kastor validate demo
+./kastor build demo
+```
+
+Expected shape:
+
+```console
+Success! Module is valid: 1 agent, 1 tool, 1 prompt, 1 model, 1 target.
+Built target langgraph: 11 files → demo/gen/langgraph
+```
+
+The scaffolded agent answers a question by fetching web pages through the reference MCP fetch server, run locally via [`uvx`](https://docs.astral.sh/uv/) — no tool API key needed. To run the generated project you need Python 3.11\+, `uvx`, and an OpenAI API key; the scaffold's `README.md` walks through it, including pointing `KASTOR_MCP_CONFIG` at the module's `mcp_servers.json`.
+
+`init` refuses a directory that already contains visible files unless you pass `--force`, and `--target` selects the pre-configured codegen target (`langgraph` today). See the [CLI reference](/reference/cli#kastor-init) for details.
+
+The rest of this quickstart uses the repository's weather example, which adds multi-agent references and the platform lifecycle.
 
 ## Validate the weather module
 

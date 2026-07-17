@@ -11,6 +11,31 @@ kastor <command> [flags] [dir]
 
 Most commands default to the current directory when `[dir]` is omitted.
 
+## `kastor init`
+
+Scaffold a new module that passes `kastor validate` and `kastor build` with zero edits.
+
+```bash
+kastor init [--target name] [--force] [dir]
+```
+
+Example:
+
+```bash
+kastor init demo
+```
+
+The scaffold is six files: `kastor.hcl` (a model and a codegen target), one `.agent`, one `.tool`, one `.prompt`, `mcp_servers.json`, and a `README.md`. The tool binds to the reference MCP fetch server (`uvx mcp-server-fetch`, declared in `mcp_servers.json`), so the generated project runs without writing any code. Output is deterministic: the same Kastor version always produces a byte-identical scaffold.
+
+Flags:
+
+| Flag | Meaning |
+| --- | --- |
+| `--target` | Codegen target to pre-configure. Implemented: `langgraph` (default). `eve` is a usage error until its generator ships. |
+| `--force` | Scaffold into a non-empty directory. Only the scaffold's own file names are overwritten; everything else is kept. |
+
+A directory that already contains visible files is refused with exit code `2`. Hidden entries such as `.git` never block scaffolding, so `kastor init` works in a freshly created git repository.
+
 ## `kastor validate`
 
 Parse, type-check, resolve references, check prompt variables, and build the dependency graph.
@@ -139,7 +164,6 @@ kastor version
 
 | Surface | Status |
 | --- | --- |
-| `kastor init` | Listed in the design spec, not implemented in the current CLI. |
 | `--json` output | Described as a design direction for structured diagnostics and plans, not implemented in the current CLI. |
 | `kastor compile` | Not part of the current CLI. Use `kastor build`. |
 

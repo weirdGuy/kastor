@@ -20,6 +20,7 @@ Kastor is an early proof of concept.
 
 Working today:
 
+- scaffold a new module with `kastor init`
 - parse `.agent`, `.tool`, `.prompt`, and `kastor.hcl`
 - validate references and prompt variables
 - build runnable LangGraph projects
@@ -87,6 +88,21 @@ agent "weather" {
 ```
 
 The generated code is not the source of truth. The Kastor module is.
+
+## Quickstart: start your own module
+
+`kastor init` scaffolds a minimal working module — one agent, one MCP tool, one prompt, a model, and a LangGraph codegen target — that validates and builds with zero edits:
+
+```sh
+kastor init demo
+cd demo
+kastor validate
+kastor build
+```
+
+The scaffolded agent answers a question by fetching web pages through the reference MCP fetch server (run via [`uvx`](https://docs.astral.sh/uv/), no API key needed). The scaffold's `README.md` walks through running the generated project end to end.
+
+`init` refuses a directory that already contains visible files; `--force` overwrites only the scaffold's own file names and keeps everything else.
 
 ## Quickstart: no credentials required
 
