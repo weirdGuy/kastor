@@ -5,10 +5,14 @@
 import { defineAgent } from "eve";
 
 export default defineAgent({
-  name: "forecast",
+  description: "Produces a short forecast summary for a location",
   model: "openai/gpt-4o-mini",
-  modelOptions: {
-    max_tokens: 4096,
-    temperature: 0.2,
+  outputSchema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      summary: { type: "string" },
+    },
+    required: ["summary"],
   },
 });

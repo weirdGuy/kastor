@@ -9,14 +9,19 @@
 import { defineMcpClientConnection } from "eve/connections";
 
 const url = process.env.KASTOR_MCP_SEARCH_SERVER_URL;
-if (!url) {
-  throw new Error(
-    "kastor: MCP server \"search-server\" needs KASTOR_MCP_SEARCH_SERVER_URL set to its endpoint URL",
-  );
-}
 
 export default defineMcpClientConnection({
-  url,
+  url: url ?? "https://kastor-mcp-url-not-set.invalid/KASTOR_MCP_SEARCH_SERVER_URL",
   description: "Search the web",
   tools: { allow: ["tavily_search"] },
+  // Fails at first server contact, not at build: eve build evaluates this
+  // module, so the missing-URL check cannot live at the top level.
+  headers: () => {
+    if (!url) {
+      throw new Error(
+        "kastor: MCP server \"search-server\" needs KASTOR_MCP_SEARCH_SERVER_URL set to its endpoint URL",
+      );
+    }
+    return {};
+  },
 });

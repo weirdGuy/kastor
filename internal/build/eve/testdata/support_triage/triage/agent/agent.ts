@@ -5,10 +5,16 @@
 import { defineAgent } from "eve";
 
 export default defineAgent({
-  name: "triage",
+  description: "Classifies an inbound support ticket into category, priority, and a one-line summary",
   model: "openai/gpt-4o-mini",
-  modelOptions: {
-    max_tokens: 1024,
-    temperature: 0.1,
+  outputSchema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      category: { type: "string" },
+      priority: { type: "string" },
+      summary: { type: "string" },
+    },
+    required: ["category", "priority", "summary"],
   },
 });

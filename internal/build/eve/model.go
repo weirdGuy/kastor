@@ -34,10 +34,17 @@ func lookupPrefix(m *schema.Model) (string, error) {
 }
 
 // genAgentTS emits an agent directory's agent.ts: defineAgent with the
-// agent's name, its model as a gateway model string, and the model block's
-// params passed through verbatim as modelOptions (provider-specific keys,
-// exactly as in the spec — SPEC.md §3.1 says targets do not validate them).
-func genAgentTS(a *schema.Agent, m *schema.Model) ([]byte, error) {
+// agent's model as a gateway model string, its description (required for
+// subagents — eve surfaces it to the parent as the lowered subagent tool's
+// description), and its output blocks as outputSchema. eve derives identity
+// from the package name / subagent directory basename, so no name field is
+// authored (eve@0.11.4 rejects unknown keys).
+//
+// The model block's params are deliberately not emitted: eve's public agent
+// config forwards only AI SDK providerOptions, so standard sampling
+// parameters (temperature, max_tokens, …) have no authored surface at
+// eve@0.11.4. The README reports them as not applied.
+func genAgentTS(a *schema.Agent, m *schema.Model, subagent bool) ([]byte, error) {
 	prefix, err := lookupPrefix(m)
 	if err != nil {
 		return nil, err
@@ -54,20 +61,55 @@ func genAgentTS(a *schema.Agent, m *schema.Model) ([]byte, error) {
 	}
 	b.WriteString("\nimport { defineAgent } from \"eve\";\n")
 	b.WriteString("\nexport default defineAgent({\n")
-	fmt.Fprintf(&b, "  name: %s,\n", tsString(a.Name))
-	fmt.Fprintf(&b, "  model: %s,\n", tsString(prefix+"/"+m.ID))
-
-	if len(m.Params) > 0 {
-		b.WriteString("  modelOptions: {\n")
-		for _, key := range sortedKeys(m.Params) {
-			lit, err := tsLiteral(m.Params[key])
-			if err != nil {
-				return nil, fmt.Errorf("%s: params key %q: %w", m.Addr(), key, err)
-			}
-			fmt.Fprintf(&b, "    %s: %s,\n", tsKey(key), lit)
-		}
-		b.WriteString("  },\n")
+	switch {
+	case a.Description != "":
+		fmt.Fprintf(&b, "  description: %s,\n", tsString(a.Description))
+	case subagent:
+		fmt.Fprintf(&b, "  description: %s,\n", tsString("Kastor agent "+a.Addr()+"."))
 	}
+	fmt.Fprintf(&b, "  model: %s,\n", tsString(prefix+"/"+m.ID))
+	writeOutputSchema(&b, a)
 	b.WriteString("});\n")
 	return []byte(b.String()), nil
+}
+
+// writeOutputSchema renders the agent's output blocks as a JSON Schema
+// object literal — eve enforces it whenever the agent runs in task mode,
+// which is exactly how subagents are invoked. Interactive conversation
+// turns ignore it; they follow the instructions.md convention instead.
+func writeOutputSchema(b *strings.Builder, a *schema.Agent) {
+	if len(a.Outputs) == 0 {
+		return
+	}
+	b.WriteString("  outputSchema: {\n")
+	b.WriteString("    type: \"object\",\n")
+	b.WriteString("    additionalProperties: false,\n")
+	b.WriteString("    properties: {\n")
+	for _, out := range a.Outputs {
+		fmt.Fprintf(b, "      %s: { type: %s", tsKey(out.Name), tsString(jsonType(out.Type)))
+		if out.Description != "" {
+			fmt.Fprintf(b, ", description: %s", tsString(out.Description))
+		}
+		b.WriteString(" },\n")
+	}
+	b.WriteString("    },\n")
+	required := make([]string, len(a.Outputs))
+	for i, out := range a.Outputs {
+		required[i] = tsString(out.Name)
+	}
+	fmt.Fprintf(b, "    required: [%s],\n", strings.Join(required, ", "))
+	b.WriteString("  },\n")
+}
+
+// jsonType maps an Kastor type keyword to its JSON Schema type name.
+func jsonType(t string) string {
+	switch t {
+	case "string":
+		return "string"
+	case "number":
+		return "number"
+	case "bool":
+		return "boolean"
+	}
+	return "object"
 }

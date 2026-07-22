@@ -20,7 +20,12 @@ An eve agent is an ordinary Vercel project: `vercel deploy` ships it unchanged.
 Models route through the Vercel AI Gateway: set `AI_GATEWAY_API_KEY`, or rely
 on project OIDC when the agent is deployed on Vercel.
 
-- `model.fast` — provider `openai`, routed as `openai/gpt-4o-mini`
+- `model.fast` — provider `openai`, routed as `openai/gpt-4o-mini`; params not applied: `max_tokens`, `temperature`
+
+eve's agent config forwards only provider-specific `providerOptions` to the
+AI SDK — standard sampling parameters (`temperature`, `max_tokens`, …) have
+no authored surface in the pinned eve release, so the model runs with the
+provider's defaults and the spec's params are recorded here instead.
 
 ## Agents
 
@@ -30,12 +35,12 @@ on project OIDC when the agent is deployed on Vercel.
   orders it before its dependent but implies no delegation — eve makes it an
   invokable subagent, which is a strictly wider capability
 
-Each agent's typed IO contract (its input/output blocks) has no eve
-equivalent. It degrades to convention: generated Inputs/Outputs sections in
-that agent's instructions.md, which the model is instructed to follow but
-nothing enforces. Cross-agent input defaults are likewise not wired — the
-instructions tell the model to delegate to the subagent or use the value
-from the message.
+Each agent's output blocks become its `outputSchema`, which eve enforces in
+task mode — exactly how subagents are invoked. Interactive turns ignore the
+schema and follow the generated Inputs/Outputs sections in instructions.md
+as convention. Inputs are not typed on eve, and cross-agent input defaults
+are not wired — the instructions tell the model to delegate to the subagent
+or use the value from the message.
 
 ## MCP servers
 

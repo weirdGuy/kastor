@@ -238,7 +238,7 @@ func (pb *projectBuilder) emitAgentDir(a *schema.Agent, dir, parent string, orde
 		return fmt.Errorf("%s: unknown reference %s", a.Addr(), a.Model)
 	}
 	pb.models[model.Name] = model
-	agentTS, err := genAgentTS(a, model)
+	agentTS, err := genAgentTS(a, model, parent != "")
 	if err != nil {
 		return err
 	}

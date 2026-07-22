@@ -5,10 +5,14 @@
 import { defineAgent } from "eve";
 
 export default defineAgent({
-  name: "geocoder",
+  description: "Resolves place names to coordinates",
   model: "openai/gpt-4o-mini",
-  modelOptions: {
-    max_tokens: 4096,
-    temperature: 0.2,
+  outputSchema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      coordinates: { type: "string" },
+    },
+    required: ["coordinates"],
   },
 });

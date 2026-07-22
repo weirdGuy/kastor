@@ -84,9 +84,18 @@ func (pb *projectBuilder) genReadme() []byte {
 
 func (pb *projectBuilder) writeModels(b *strings.Builder) {
 	b.WriteString("\n## Models\n\nModels route through the Vercel AI Gateway: set `AI_GATEWAY_API_KEY`, or rely\non project OIDC when the agent is deployed on Vercel.\n\n")
+	withParams := false
 	for _, name := range sortedKeys(pb.models) {
 		m := pb.models[name]
-		fmt.Fprintf(b, "- `%s` — provider `%s`, routed as `%s/%s`\n", m.Addr(), m.Provider, gatewayPrefixes[m.Provider], m.ID)
+		fmt.Fprintf(b, "- `%s` — provider `%s`, routed as `%s/%s`", m.Addr(), m.Provider, gatewayPrefixes[m.Provider], m.ID)
+		if len(m.Params) > 0 {
+			withParams = true
+			fmt.Fprintf(b, "; params not applied: %s", backtickList(sortedKeys(m.Params)))
+		}
+		b.WriteString("\n")
+	}
+	if withParams {
+		b.WriteString("\neve's agent config forwards only provider-specific `providerOptions` to the\nAI SDK — standard sampling parameters (`temperature`, `max_tokens`, …) have\nno authored surface in the pinned eve release, so the model runs with the\nprovider's defaults and the spec's params are recorded here instead.\n")
 	}
 }
 
@@ -105,7 +114,7 @@ func (pb *projectBuilder) writeAgents(b *strings.Builder) {
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString("\nEach agent's typed IO contract (its input/output blocks) has no eve\nequivalent. It degrades to convention: generated Inputs/Outputs sections in\nthat agent's instructions.md, which the model is instructed to follow but\nnothing enforces. Cross-agent input defaults are likewise not wired — the\ninstructions tell the model to delegate to the subagent or use the value\nfrom the message.\n")
+	b.WriteString("\nEach agent's output blocks become its `outputSchema`, which eve enforces in\ntask mode — exactly how subagents are invoked. Interactive turns ignore the\nschema and follow the generated Inputs/Outputs sections in instructions.md\nas convention. Inputs are not typed on eve, and cross-agent input defaults\nare not wired — the instructions tell the model to delegate to the subagent\nor use the value from the message.\n")
 }
 
 func (pb *projectBuilder) writeServers(b *strings.Builder) {
