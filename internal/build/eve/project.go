@@ -12,24 +12,32 @@ import (
 // range would let a rebuild-free project drift onto a breaking release.
 const eveVersion = "0.11.4"
 
+// aiVersion satisfies eve's only required peer dependency, which eve pins
+// exactly (npm refuses to install otherwise). It must move in lockstep with
+// eveVersion: check `npm view eve@<version> peerDependencies` when bumping.
+const aiVersion = "7.0.0-beta.178"
+
+// zodVersion is the floor the pinned ai release accepts (^3.25.76 || ^4.1.8).
+const zodVersion = "^3.25.76"
+
 // genPackageJSON emits the project manifest. The eve dependency is pinned
-// exactly (see eveVersion); ai and zod follow eve's own install guidance.
+// exactly (see eveVersion) and ai/zod match its peer requirements.
 func genPackageJSON(root *schema.Agent) []byte {
 	var b strings.Builder
 	b.WriteString("{\n")
 	fmt.Fprintf(&b, "  \"name\": %s,\n", tsString(strings.ToLower(root.Name)))
 	b.WriteString("  \"private\": true,\n")
 	b.WriteString("  \"type\": \"module\",\n")
-	b.WriteString("  \"engines\": { \"node\": \"24.x\" },\n")
+	b.WriteString("  \"engines\": { \"node\": \">=24\" },\n")
 	b.WriteString("  \"scripts\": {\n")
 	b.WriteString("    \"build\": \"eve build\",\n")
 	b.WriteString("    \"dev\": \"eve dev\",\n")
 	b.WriteString("    \"start\": \"eve start\"\n")
 	b.WriteString("  },\n")
 	b.WriteString("  \"dependencies\": {\n")
-	b.WriteString("    \"ai\": \"^5\",\n")
+	fmt.Fprintf(&b, "    \"ai\": %s,\n", tsString(aiVersion))
 	fmt.Fprintf(&b, "    \"eve\": %s,\n", tsString(eveVersion))
-	b.WriteString("    \"zod\": \"^3\"\n")
+	fmt.Fprintf(&b, "    \"zod\": %s\n", tsString(zodVersion))
 	b.WriteString("  }\n")
 	b.WriteString("}\n")
 	return []byte(b.String())
