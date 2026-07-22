@@ -13,3 +13,9 @@ target "langgraph" {
   type   = "codegen"
   output = "./gen/langgraph"
 }
+
+# Codegen target -> `kastor build` emits one eve project per root agent
+target "eve" {
+  type   = "codegen"
+  output = "./gen/eve"
+}

@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/weirdGuy/kastor/internal/build"
+	"github.com/weirdGuy/kastor/internal/build/eve"
 	"github.com/weirdGuy/kastor/internal/build/langgraph"
 	"github.com/weirdGuy/kastor/internal/graph"
 	"github.com/weirdGuy/kastor/internal/module"
@@ -23,6 +24,7 @@ import (
 // here is a codegen error at build time, not a validation error — the block
 // itself is valid spec.
 var generators = map[string]build.Generator{
+	"eve":       eve.Generator{},
 	"langgraph": langgraph.Generator{},
 }
 

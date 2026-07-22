@@ -14,6 +14,12 @@ target "langgraph" {
   output = "./gen/langgraph"
 }
 
+# Codegen target -> `kastor build` emits one eve project per root agent
+target "eve" {
+  type   = "codegen"
+  output = "./gen/eve"
+}
+
 # Platform target -> `kastor plan` / `kastor apply` against the built-in
 # ephemeral in-memory platform: no credentials, no network. Swap for a real
 # platform target once one ships (provider TBD -- candidates: Bedrock

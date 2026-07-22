@@ -1,0 +1,5 @@
+agent "solo" {
+  description = "A lone agent that binds none of the module's spare blocks"
+
+  model = model.fast
+}
