@@ -10,6 +10,15 @@ v0 exit criteria ([KAS-36](https://linear.app/getkastor/issue/KAS-36)) are met.
 
 ## [Unreleased]
 
+### Added
+
+- Codegen target `eve` (Vercel eve, TypeScript): `kastor build` emits one
+  eve project per root agent — `agent.ts` model config, `instructions.md`
+  with the IO contract as convention, referenced agents as subagent
+  directories, MCP tools as allow-listed connection files (endpoint URLs
+  from `KASTOR_MCP_<SERVER>_URL`), http/runtime tools as `defineTool` files
+  with Zod schemas. Both example modules build for it (KAS-32)
+
 ## [0.1.2] - 2026-07-17
 
 ### Fixed

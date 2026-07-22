@@ -1,0 +1,4 @@
+agent "helper" {
+  model = model.fast
+  tools = [tool.native_search]
+}
