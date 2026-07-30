@@ -54,7 +54,7 @@ func Apply(ctx context.Context, p Provider, job *Job, plan *Plan, save func() er
 			if err != nil {
 				return fail(c, err)
 			}
-			res, err := stateEntry(job, id, desired)
+			res, err := stateEntry(p, job, id, desired)
 			if err != nil {
 				return fail(c, err)
 			}
@@ -72,7 +72,7 @@ func Apply(ctx context.Context, p Provider, job *Job, plan *Plan, save func() er
 			if err := p.Update(ctx, c.ID, desired); err != nil {
 				return fail(c, err)
 			}
-			res, err := stateEntry(job, c.ID, desired)
+			res, err := stateEntry(p, job, c.ID, desired)
 			if err != nil {
 				return fail(c, err)
 			}
@@ -93,7 +93,7 @@ func Apply(ctx context.Context, p Provider, job *Job, plan *Plan, save func() er
 			applied++
 
 		case ActionNoop:
-			refreshed, err := refreshStale(job, ts, c.Addr)
+			refreshed, err := refreshStale(p, job, ts, c.Addr)
 			if err != nil {
 				return fail(c, err)
 			}
@@ -107,10 +107,22 @@ func Apply(ctx context.Context, p Provider, job *Job, plan *Plan, save func() er
 	return applied, nil
 }
 
+// stateConfigNormalizer is an optional provider capability. Providers whose
+// remote comparison shape differs from the neutral module config use it to
+// persist the resolved last-applied form without changing the Provider
+// contract or the state schema.
+type stateConfigNormalizer interface {
+	NormalizeStateConfig(desired *Resource) (Object, error)
+}
+
 // stateEntry builds the state record for a just-applied resource: remote
 // id, canonical config, and its managed dependencies from the graph.
-func stateEntry(job *Job, id string, desired *Resource) (*state.Resource, error) {
-	raw, err := MarshalConfig(desired.Config)
+func stateEntry(p Provider, job *Job, id string, desired *Resource) (*state.Resource, error) {
+	config, err := stateConfig(p, desired)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := MarshalConfig(config)
 	if err != nil {
 		return nil, err
 	}
@@ -123,9 +135,16 @@ func stateEntry(job *Job, id string, desired *Resource) (*state.Resource, error)
 	return &state.Resource{ID: id, Config: raw, Dependencies: deps}, nil
 }
 
+func stateConfig(p Provider, desired *Resource) (Object, error) {
+	if normalizer, ok := p.(stateConfigNormalizer); ok {
+		return normalizer.NormalizeStateConfig(desired)
+	}
+	return desired.Config, nil
+}
+
 // refreshStale rewrites a noop resource's state entry when its recorded
 // config no longer matches the spec, reporting whether it did.
-func refreshStale(job *Job, ts *state.TargetState, addr string) (bool, error) {
+func refreshStale(p Provider, job *Job, ts *state.TargetState, addr string) (bool, error) {
 	res, ok := ts.Resources[addr]
 	if !ok {
 		return false, nil
@@ -134,11 +153,11 @@ func refreshStale(job *Job, ts *state.TargetState, addr string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	stale, err := configStale(desired, res.Config)
+	stale, err := configStale(p, desired, res.Config)
 	if err != nil || !stale {
 		return false, err
 	}
-	fresh, err := stateEntry(job, res.ID, desired)
+	fresh, err := stateEntry(p, job, res.ID, desired)
 	if err != nil {
 		return false, err
 	}

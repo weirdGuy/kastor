@@ -87,6 +87,72 @@ func TestApplyFreshModuleCreatesEverything(t *testing.T) {
 	}
 }
 
+func TestApplyStoresProviderNormalizedConfig(t *testing.T) {
+	job := newJob(t)
+	p := &stateNormalizingProvider{Fake: providertest.New()}
+	plan, err := provider.BuildPlan(context.Background(), p, job)
+	if err != nil {
+		t.Fatalf("BuildPlan: %v", err)
+	}
+	if _, err := provider.Apply(context.Background(), p, job, plan, countingSave(new(int))); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+
+	for addr, resource := range job.State.Target("fake").Resources {
+		var config provider.Object
+		if err := json.Unmarshal(resource.Config, &config); err != nil {
+			t.Fatalf("%s: decode state config: %v", addr, err)
+		}
+		if config["normalized_for_state"] != addr {
+			t.Errorf("%s: state config = %#v, want provider-normalized marker", addr, config)
+		}
+		if _, exists := config["model"]; exists {
+			t.Errorf("%s: state retained raw desired config: %#v", addr, config)
+		}
+	}
+}
+
+func TestApplyNoopRefreshStoresProviderNormalizedConfig(t *testing.T) {
+	job := newJob(t)
+	p := &stateNormalizingProvider{Fake: providertest.New()}
+	job.State.Target("fake").Resources["agent.geocoder"] = &state.Resource{
+		ID:     "fake-1",
+		Config: json.RawMessage(`{"raw":true}`),
+	}
+	plan := &provider.Plan{
+		Target: "fake",
+		Changes: []provider.Change{{
+			Addr:   "agent.geocoder",
+			Action: provider.ActionNoop,
+			ID:     "fake-1",
+		}},
+	}
+
+	var saves int
+	if _, err := provider.Apply(context.Background(), p, job, plan, countingSave(&saves)); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if saves != 1 {
+		t.Fatalf("state saves = %d, want 1", saves)
+	}
+	var config provider.Object
+	raw := job.State.Target("fake").Resources["agent.geocoder"].Config
+	if err := json.Unmarshal(raw, &config); err != nil {
+		t.Fatalf("decode state config: %v", err)
+	}
+	if config["normalized_for_state"] != "agent.geocoder" {
+		t.Errorf("state config = %#v, want provider-normalized marker", config)
+	}
+}
+
+type stateNormalizingProvider struct {
+	*providertest.Fake
+}
+
+func (*stateNormalizingProvider) NormalizeStateConfig(desired *provider.Resource) (provider.Object, error) {
+	return provider.Object{"normalized_for_state": desired.Addr}, nil
+}
+
 func TestApplyPartialFailureThenRecovery(t *testing.T) {
 	job := newJob(t)
 	fake := providertest.New()

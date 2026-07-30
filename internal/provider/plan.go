@@ -311,8 +311,12 @@ func diffPaths(diffs []AttrDiff) []string {
 // configStale reports whether the canonical desired config differs from the
 // config recorded in state — used by apply to refresh state on noops after
 // the user aligns the spec with a manual remote change.
-func configStale(desired *Resource, recorded json.RawMessage) (bool, error) {
-	want, err := MarshalConfig(desired.Config)
+func configStale(p Provider, desired *Resource, recorded json.RawMessage) (bool, error) {
+	config, err := stateConfig(p, desired)
+	if err != nil {
+		return false, err
+	}
+	want, err := MarshalConfig(config)
 	if err != nil {
 		return false, err
 	}

@@ -55,8 +55,7 @@
   ],
   "metadata": {
     "kastor_managed": "agent.weather",
-    "team": "platform",
-    "console_note": "foreign metadata is not part of the comparison"
+    "team": "platform"
   },
   "version": 7,
   "created_at": "2026-04-03T18:24:10.412Z",

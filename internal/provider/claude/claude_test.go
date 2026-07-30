@@ -81,6 +81,12 @@ func TestCreateSendsNormalizedSDKRequest(t *testing.T) {
 		}
 		for _, raw := range body["tools"].([]any) {
 			toolset := raw.(map[string]any)
+			for _, rawConfig := range toolset["configs"].([]any) {
+				config := rawConfig.(map[string]any)
+				if _, exists := config["permission_policy"]; exists {
+					t.Errorf("create request authors a per-tool permission policy: %#v", config)
+				}
+			}
 			if toolset["type"] != mcpToolsetType {
 				continue
 			}

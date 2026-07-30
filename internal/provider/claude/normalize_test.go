@@ -58,6 +58,101 @@ func TestNormalizeGoldenResponses(t *testing.T) {
 	}
 }
 
+func TestNormalizeStateConfigMatchesGoldenEcho(t *testing.T) {
+	desired := fullResource(t)
+	stateConfig, err := New().NormalizeStateConfig(desired)
+	if err != nil {
+		t.Fatalf("NormalizeStateConfig: %v", err)
+	}
+	_, rules, err := normalizeSpec(desired)
+	if err != nil {
+		t.Fatalf("normalizeSpec: %v", err)
+	}
+	echo, err := normalizeAPIEcho(loadObject(t, "full_api_response.json"), rules)
+	if err != nil {
+		t.Fatalf("normalizeAPIEcho: %v", err)
+	}
+	if diff := cmp.Diff(echo, stateConfig); diff != "" {
+		t.Errorf("normalized state != API echo (-echo +state):\n%s", diff)
+	}
+
+	diffs, err := New().Diff(&provider.Resource{Addr: desired.Addr, Config: stateConfig}, loadObject(t, "full_api_response.json"))
+	if err != nil {
+		t.Fatalf("Diff normalized state: %v", err)
+	}
+	if len(diffs) != 0 {
+		t.Errorf("normalized state has drift against its API echo: %#v", diffs)
+	}
+}
+
+func TestGoldenEchoToolConfigsContainOnlyEnablement(t *testing.T) {
+	echo := loadObject(t, "full_api_response.json")
+	for i, rawToolset := range echo["tools"].([]any) {
+		toolset := rawToolset.(map[string]any)
+		for j, rawConfig := range toolset["configs"].([]any) {
+			config := rawConfig.(map[string]any)
+			if len(config) != 2 || config["name"] == nil || config["enabled"] == nil {
+				t.Errorf("tools[%d].configs[%d] = %#v, want only name and enabled", i, j, config)
+			}
+		}
+	}
+}
+
+func TestNormalizedStatePreservesAppliedMCPURL(t *testing.T) {
+	desired := fullResource(t)
+	stateConfig, err := New().NormalizeStateConfig(desired)
+	if err != nil {
+		t.Fatalf("NormalizeStateConfig: %v", err)
+	}
+
+	t.Setenv("KASTOR_MCP_GITHUB_URL", "https://changed.example.com/mcp")
+	diffs, err := New().Diff(
+		&provider.Resource{Addr: desired.Addr, Config: stateConfig},
+		loadObject(t, "full_api_response.json"),
+	)
+	if err != nil {
+		t.Fatalf("Diff normalized state: %v", err)
+	}
+	if len(diffs) != 0 {
+		t.Errorf("last-applied state re-resolved MCP URL: %#v", diffs)
+	}
+
+	diffs, err = New().Diff(desired, loadObject(t, "full_api_response.json"))
+	if err != nil {
+		t.Fatalf("Diff current desired: %v", err)
+	}
+	if diff := cmp.Diff([]string{"mcp_servers[0]"}, paths(diffs)); diff != "" {
+		t.Errorf("current desired MCP URL change paths (-want +got):\n%s", diff)
+	}
+}
+
+func TestNormalizeRequestOmitsPerToolPermissionPolicies(t *testing.T) {
+	stateConfig, err := New().NormalizeStateConfig(fullResource(t))
+	if err != nil {
+		t.Fatalf("NormalizeStateConfig: %v", err)
+	}
+	for _, rawToolset := range stateConfig["tools"].([]any) {
+		toolset := rawToolset.(map[string]any)
+		for _, rawConfig := range toolset["configs"].([]any) {
+			rawConfig.(map[string]any)["permission_policy"] = map[string]any{"type": "always_ask"}
+		}
+	}
+
+	request, err := normalizeAPIRequest(&provider.Resource{Addr: "agent.weather", Config: stateConfig})
+	if err != nil {
+		t.Fatalf("normalizeAPIRequest: %v", err)
+	}
+	for i, rawToolset := range request["tools"].([]any) {
+		toolset := rawToolset.(map[string]any)
+		for j, rawConfig := range toolset["configs"].([]any) {
+			config := rawConfig.(map[string]any)
+			if _, exists := config["permission_policy"]; exists {
+				t.Errorf("request.tools[%d].configs[%d] authors permission_policy: %#v", i, j, config)
+			}
+		}
+	}
+}
+
 func TestNormalizeModelStringAndDefaults(t *testing.T) {
 	got, err := normalizeEchoModel("claude-sonnet-4-5")
 	if err != nil {

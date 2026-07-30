@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -115,7 +116,6 @@ func TestClaudeManagedAgentsAcceptance(t *testing.T) {
 	resource = st.Target(claudeAcceptanceTarget).Resources[claudeAcceptanceAddr]
 	drifted := decodeAcceptanceConfig(t, resource.Config)
 	drifted["description"] = "KAS-38 out-of-band acceptance drift"
-	drifted["metadata"] = map[string]any{claudeAcceptanceMarkerKey: marker}
 	if err := realProvider.Update(context.Background(), resource.ID, &provider.Resource{
 		Addr:   claudeAcceptanceAddr,
 		Config: drifted,
@@ -161,6 +161,16 @@ func (p *acceptanceMetadataProvider) Update(ctx context.Context, id string, desi
 
 func (p *acceptanceMetadataProvider) Diff(desired *provider.Resource, remote provider.Object) ([]provider.AttrDiff, error) {
 	return p.Provider.Diff(p.withMetadata(desired), remote)
+}
+
+func (p *acceptanceMetadataProvider) NormalizeStateConfig(desired *provider.Resource) (provider.Object, error) {
+	normalizer, ok := p.Provider.(interface {
+		NormalizeStateConfig(*provider.Resource) (provider.Object, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf("acceptance provider does not normalize state config")
+	}
+	return normalizer.NormalizeStateConfig(p.withMetadata(desired))
 }
 
 func (p *acceptanceMetadataProvider) withMetadata(desired *provider.Resource) *provider.Resource {

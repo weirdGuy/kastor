@@ -49,7 +49,7 @@ type normalizationRules struct {
 // normalizeForDiff returns two independent comparison objects with all
 // provider-injected and provider-owned fields handled.
 func normalizeForDiff(desired *provider.Resource, remote provider.Object) (provider.Object, provider.Object, error) {
-	spec, rules, err := normalizeSpec(desired)
+	spec, rules, err := normalizeDesired(desired)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -123,18 +123,21 @@ func normalizeUpdateParams(desired *provider.Resource, version int64) (anthropic
 // spec. In particular, the MCP permission default must remain omitted from
 // requests so the platform applies its approval-required default.
 func normalizeAPIRequest(desired *provider.Resource) (provider.Object, error) {
-	spec, _, err := normalizeSpec(desired)
+	spec, _, err := normalizeDesired(desired)
 	if err != nil {
 		return nil, err
 	}
 	request := cloneValue(spec).(provider.Object)
 	for _, value := range request["tools"].([]any) {
 		toolset := value.(map[string]any)
-		if toolset["type"] != mcpToolsetType {
-			continue
+		for _, rawConfig := range toolset["configs"].([]any) {
+			config := rawConfig.(map[string]any)
+			delete(config, "permission_policy")
 		}
-		defaultConfig := toolset["default_config"].(map[string]any)
-		delete(defaultConfig, "permission_policy")
+		if toolset["type"] == mcpToolsetType {
+			defaultConfig := toolset["default_config"].(map[string]any)
+			delete(defaultConfig, "permission_policy")
+		}
 	}
 	return request, nil
 }
@@ -175,6 +178,40 @@ func normalizedAPIArchived(remote provider.Object) (bool, error) {
 		return false, fmt.Errorf("remote.archived_at is missing")
 	}
 	return value != nil, nil
+}
+
+// NormalizeStateConfig returns the resolved comparison form stored as the
+// provider's last-applied config. It preserves the MCP URL and server defaults
+// used for this apply instead of resolving them again during a later plan.
+func (*Provider) NormalizeStateConfig(desired *provider.Resource) (provider.Object, error) {
+	spec, _, err := normalizeDesired(desired)
+	return spec, err
+}
+
+// normalizeDesired accepts both the neutral module form and the canonical form
+// written to state by NormalizeStateConfig.
+func normalizeDesired(desired *provider.Resource) (provider.Object, normalizationRules, error) {
+	if desired == nil {
+		return nil, normalizationRules{}, fmt.Errorf("claude: desired resource is nil")
+	}
+	if _, normalized := desired.Config["name"]; !normalized {
+		return normalizeSpec(desired)
+	}
+
+	metadata, ok := desired.Config["metadata"].(map[string]any)
+	if !ok {
+		return nil, normalizationRules{}, fmt.Errorf("%s: normalized state metadata must be an object, got %T", desired.Addr, desired.Config["metadata"])
+	}
+	keys := make(map[string]bool, len(metadata))
+	for key := range metadata {
+		keys[key] = true
+	}
+	rules := normalizationRules{metadataKeys: keys}
+	spec, err := normalizeAPIEcho(desired.Config, rules)
+	if err != nil {
+		return nil, normalizationRules{}, fmt.Errorf("%s: normalize stored config: %w", desired.Addr, err)
+	}
+	return spec, rules, nil
 }
 
 // normalizeSpec maps the provider-neutral agent closure to the API shape
@@ -535,6 +572,8 @@ func normalizeSpecToolsetDefaults(tools []any) []any {
 }
 
 func enabledTool(name string) map[string]any {
+	// Per-tool permission policy is deliberately absent. Kastor v0 enables the
+	// selected tool and lets it inherit the toolset's default policy.
 	return map[string]any{"name": name, "enabled": true}
 }
 
@@ -574,13 +613,83 @@ func mcpServerURLEnvName(server string) string {
 func normalizeEchoTools(tools []any) ([]any, error) {
 	out := make([]any, len(tools))
 	for i, value := range tools {
-		obj, ok := value.(map[string]any)
+		toolset, ok := value.(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("remote.tools[%d] must be an object, got %T", i, value)
 		}
-		out[i] = cloneValue(obj)
+		path := fmt.Sprintf("remote.tools[%d]", i)
+		typ, err := requiredString(toolset["type"], path+".type")
+		if err != nil {
+			return nil, err
+		}
+		if typ != agentToolsetType && typ != mcpToolsetType {
+			return nil, fmt.Errorf("%s.type is %q, expected %q or %q", path, typ, agentToolsetType, mcpToolsetType)
+		}
+
+		defaultConfig, err := normalizeEchoDefaultToolConfig(toolset["default_config"], path+".default_config")
+		if err != nil {
+			return nil, err
+		}
+		configs, err := arrayValue(toolset["configs"], path+".configs")
+		if err != nil {
+			return nil, err
+		}
+		normalizedConfigs := make([]any, len(configs))
+		for j, rawConfig := range configs {
+			config, ok := rawConfig.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("%s.configs[%d] must be an object, got %T", path, j, rawConfig)
+			}
+			configPath := fmt.Sprintf("%s.configs[%d]", path, j)
+			name, err := requiredString(config["name"], configPath+".name")
+			if err != nil {
+				return nil, err
+			}
+			enabled, err := requiredBool(config["enabled"], configPath+".enabled")
+			if err != nil {
+				return nil, err
+			}
+			normalizedConfigs[j] = map[string]any{"name": name, "enabled": enabled}
+		}
+
+		normalized := map[string]any{
+			"type":           typ,
+			"default_config": defaultConfig,
+			"configs":        normalizedConfigs,
+		}
+		if typ == mcpToolsetType {
+			server, err := requiredString(toolset["mcp_server_name"], path+".mcp_server_name")
+			if err != nil {
+				return nil, err
+			}
+			normalized["mcp_server_name"] = server
+		}
+		out[i] = normalized
 	}
 	return out, nil
+}
+
+func normalizeEchoDefaultToolConfig(raw any, path string) (map[string]any, error) {
+	config, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("%s must be an object, got %T", path, raw)
+	}
+	enabled, err := requiredBool(config["enabled"], path+".enabled")
+	if err != nil {
+		return nil, err
+	}
+	policy, ok := config["permission_policy"].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("%s.permission_policy must be an object, got %T", path, config["permission_policy"])
+	}
+	typ, err := requiredString(policy["type"], path+".permission_policy.type")
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"enabled":           enabled,
+		"permission_policy": map[string]any{"type": typ},
+	}, nil
 }
 
 func normalizeEchoMCPServers(servers []any) ([]any, error) {
@@ -642,6 +751,14 @@ func requiredString(value any, path string) (string, error) {
 		return "", fmt.Errorf("%s must be a non-empty string, got %v", path, value)
 	}
 	return text, nil
+}
+
+func requiredBool(value any, path string) (bool, error) {
+	boolean, ok := value.(bool)
+	if !ok {
+		return false, fmt.Errorf("%s must be a boolean, got %T", path, value)
+	}
+	return boolean, nil
 }
 
 func optionalArray(obj map[string]any, key, path string) ([]any, error) {
