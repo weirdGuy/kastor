@@ -5,6 +5,12 @@ description: "A concise reference for Kastor files and blocks."
 
 Kastor uses HCL for `.agent`, `.tool`, `kastor.hcl`, and `*.kastor` files. Prompt files use HCL frontmatter plus a raw body.
 
+Three rules apply to every file:
+
+- Unknown attributes and blocks are errors. Nothing is silently ignored. Kastor is strict in v0 because loosening a rule later is painless and tightening one breaks existing modules.
+- A block name may be declared once per module. Two `tool "web_search"` blocks are an error whether they sit in one file or two, and the error names both files.
+- Types are bare keywords, never strings. Write `type = string`, not `type = "string"`. The set is closed in v0: `string`, `number`, `bool`. Compound types are planned for v1.
+
 ## `.agent`
 
 `.agent` files contain one or more `agent` blocks.
@@ -63,6 +69,11 @@ Output fields:
 | `type` | required | Bare keyword: `string`, `number`, or `bool`. |
 | `description` | optional | Human-readable description. |
 
+Rules:
+
+- Every variable the agent's `system_prompt` requires must be satisfiable from that agent's own inputs and outputs. A variable that is neither is a validation error naming the agent, the prompt, and the variable.
+- An input `default` may be a literal or an `agent.<name>.output.<name>` reference. The reference is checked at compile time and creates a dependency edge, but v0 does not wire the data flow — the caller still supplies the value. See [references and dependency inference](/concepts/overview#references-and-dependency-inference).
+
 ## `.tool`
 
 `.tool` files contain one or more `tool` blocks.
@@ -92,13 +103,42 @@ tool "web_search" {
 }
 ```
 
+Fields:
+
+| Field | Status | Notes |
+| --- | --- | --- |
+| `description` | optional | Human-readable summary. Targets may require it. |
+| `param` | optional | Named parameter blocks. Zero is fine. |
+| `returns` | required | Exactly one block. |
+| `source` | required | Exactly one block. |
+
+`param` fields:
+
+| Field | Status | Notes |
+| --- | --- | --- |
+| `type` | required | Bare keyword: `string`, `number`, or `bool`. |
+| `description` | optional | Human-readable description. |
+| `default` | optional | Literal of the declared type. A param with a default is optional at call time. |
+
+`returns` fields:
+
+| Field | Status | Notes |
+| --- | --- | --- |
+| `type` | required | Bare keyword: `string`, `number`, or `bool`. |
+
+`source` fields:
+
+| Field | Status | Notes |
+| --- | --- | --- |
+| `kind` | required | One of `mcp`, `http`, `builtin`, `runtime`, `script`. |
+| `uri` | depends on `kind` | Required for `mcp`, `http`, and `script`. An error on `builtin` and `runtime`, which have no external location. |
+
 Rules:
 
-- Exactly one `returns` block is required.
-- Exactly one `source` block is required.
-- Parameter types are bare keywords: `string`, `number`, or `bool`.
-- Parameter defaults must be literals of the declared type.
+- A param has no `optional` attribute. Give it a `default` instead — that is what makes it optional at call time. Agent `input` blocks are the ones with `optional`; tool params are not the same shape.
 - `default = null` is invalid. Omit the attribute instead.
+- A mismatch between a `default` and its declared `type` is a compile error.
+- For `mcp` sources the `uri` pins identity only: `mcp://<server>/<tool>` names the server and the tool on it, nothing more. Transport and connection details are deployment configuration, not spec. Generated projects read them from `mcp_servers.json` (or the path in `KASTOR_MCP_CONFIG`); the `claude_agents` provider reads `KASTOR_MCP_<SERVER>_URL`.
 
 Source kinds. Every kind parses; what a kind means is decided by the target that consumes it.
 
@@ -132,9 +172,17 @@ Fields:
 | `name` | required | Creates the `prompt.<name>` address. |
 | `requires` | optional | Variables expected in the body. If present, it must exactly match body variables. |
 
+Rules:
+
+- The frontmatter starts at byte 0. The opening `---` must be the first line of the file, and a closing `---` line is required.
+- The frontmatter interior is HCL, so `#` comments work there. `name` and `requires` are the only attributes it accepts.
+- The body is everything after the closing delimiter, preserved byte for byte. An empty or whitespace-only body is a compile error.
+
 Variables use `{{name}}` or `{{ name }}`. The identifier must match `[A-Za-z_][A-Za-z0-9_]*`.
 
-If `requires` is omitted, Kastor infers variables from the body. If `requires` is present, unused or missing variables are validation errors.
+Any other brace sequence is literal body text, not an error. `{{"a": 1}}`, `{{not-a-var}}`, and a lone `{{` all pass through untouched, so you can embed JSON and code examples freely. There is no escape syntax for a literal well-formed `{{var}}` in v0.
+
+If `requires` is omitted, Kastor infers variables from the body. If `requires` is present, it must match the body exactly in both directions: a body variable missing from `requires` and a `requires` entry never used in the body are both errors, as is a duplicate entry.
 
 ## `kastor.hcl` and `*.kastor`
 
@@ -165,23 +213,40 @@ target "memory" {
 
 | Field | Status | Notes |
 | --- | --- | --- |
-| `provider` | required | Provider name such as `openai`, `anthropic`, `google`, or `ollama`. |
-| `id` | required | Provider model identifier. |
-| `params` | optional | Provider-specific key/value bag. Keys are not checked at parse time — the consuming target validates them. LangGraph codegen requires valid Python keyword arguments; `claude_agents` accepts `speed` and rejects everything else, including `temperature` and `max_tokens`. |
+| `provider` | required | Vendor name. Every target decides which ones it accepts — see the table below. |
+| `id` | required | Provider model identifier, such as `gpt-4o-mini`. Kastor never inspects it. |
+| `params` | optional | Provider-specific key/value bag. Keys are not checked at parse time — the consuming target validates them. LangGraph codegen requires valid Python keyword arguments; `claude_agents` accepts `speed` and rejects everything else, including `temperature` and `max_tokens`. Whole numbers stay integers, fractional values become floats, so `max_tokens = 4096` generates `4096` and not `4096.0`. |
+
+Any `provider` string parses. A target that cannot map it fails when it consumes the block, which is `kastor build` for a codegen target and `kastor plan` for a platform target:
+
+| `provider` | `langgraph` | `eve` | `claude_agents` |
+| --- | --- | --- | --- |
+| `openai` | `langchain-openai`, `OPENAI_API_KEY` | Routed as `openai/<id>`. | Error. |
+| `anthropic` | `langchain-anthropic`, `ANTHROPIC_API_KEY` | Routed as `anthropic/<id>`. | Supported. |
+| `google` | `langchain-google-genai`, `GOOGLE_API_KEY` | Routed as `google/<id>`. | Error. |
+| `ollama` | `langchain-ollama`, no credential | Error — the gateway cannot route a local runtime. | Error. |
+| anything else | Error. | Error. | Error. |
+
+The `eve` target routes every model through the Vercel AI Gateway, so it needs `AI_GATEWAY_API_KEY` rather than a per-vendor key (or project OIDC when deployed on Vercel).
 
 `target` fields:
 
 | Field | Status | Notes |
 | --- | --- | --- |
 | `type` | required | `codegen` or `platform`. |
-| `output` | required for `codegen` | Output directory for generated code. |
-| `auth` | optional for `platform` | Currently supports `api_key_env`. |
+| `output` | `codegen` only | Output directory for generated code. Required on `codegen`, an error on `platform`. |
+| `auth` | `platform` only | Optional on `platform`, an error on `codegen`. Currently supports `api_key_env`. |
+
+Rules:
+
+- Project files take literal values only. References and expressions are not supported in v0, in `params` or anywhere else.
+- A field that is meaningless for a target's type is an error, not an ignored line. Configs rot through silent acceptance.
 
 Target labels select implementations:
 
 - `target "langgraph"` selects the LangGraph code generator.
 - `target "eve"` selects the Vercel eve code generator.
-- `target "memory"` selects the built-in in-memory platform provider.
+- `target "memory"` selects the built-in in-memory platform provider. It takes no credentials, so an `auth` block on it is an error.
 - `target "claude_agents"` selects the Claude Managed Agents provider. Its `auth` block defaults to `api_key_env = "ANTHROPIC_API_KEY"`; see [platform providers](/reference/cli#platform-providers) for what it does and does not accept.
 
 A label with no registered generator or provider is an error naming the ones that exist.
