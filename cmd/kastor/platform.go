@@ -8,6 +8,7 @@ import (
 
 	"github.com/weirdGuy/kastor/internal/module"
 	"github.com/weirdGuy/kastor/internal/provider"
+	"github.com/weirdGuy/kastor/internal/provider/claude"
 	"github.com/weirdGuy/kastor/internal/provider/memory"
 	"github.com/weirdGuy/kastor/internal/schema"
 	"github.com/weirdGuy/kastor/internal/state"
@@ -15,11 +16,10 @@ import (
 
 // providerFactories maps a platform target's name to its provider factory:
 // the target label doubles as the provider selector, exactly like codegen
-// target names select generators (see cmd/kastor/build.go). The hosted
-// provider — Claude Managed Agents, under the "claude_agents" label —
-// registers here once implemented (SPEC.md §8).
+// target names select generators (see cmd/kastor/build.go).
 var providerFactories = map[string]func(*schema.Target) (provider.Provider, error){
-	"memory": memory.Factory,
+	"claude_agents": claude.Factory,
+	"memory":        memory.Factory,
 }
 
 // platformJob is one reconcile unit: a platform target with its resolved

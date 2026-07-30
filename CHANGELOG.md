@@ -12,6 +12,9 @@ v0 exit criteria ([KAS-36](https://linear.app/getkastor/issue/KAS-36)) are met.
 
 ### Added
 
+- Claude Managed Agents platform provider: `target "claude_agents"` supports
+  plan, apply, and destroy with optimistic version checks, archive-aware drift
+  handling, classified retries, and API-key auth (KAS-38)
 - Codegen target `eve` (Vercel eve, TypeScript): `kastor build` emits one
   eve project per root agent — `agent.ts` model config, `instructions.md`
   with the IO contract as convention, referenced agents as subagent
