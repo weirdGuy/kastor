@@ -56,16 +56,28 @@ Vendor-neutral: agents reference `model.fast`, never raw model strings. Swapping
 - Unknown attributes and blocks are hard errors (strict in v0: loosening later is painless, tightening later breaks users).
 - Duplicate block names within a file are a parse error. Module-wide (cross-file) duplicate detection is owned by module loading (see issue #6).
 
-**Codegen provider mapping.** Codegen targets support a fixed provider set; a `provider` outside this table is a codegen error (not a parse error — the block itself stays valid, e.g. for platform targets that accept it). LangGraph mapping:
+**Provider support is per target.** Any `provider` string parses — the block stays valid regardless, since a module may declare models several targets consume differently. A target that cannot map the provider fails when it consumes the block: `kastor build` for a codegen target, `kastor plan` for a platform target (a planned create is rendered through the provider, §5.2).
 
-| provider | `init_chat_model` prefix | pip package | credentials |
-|----------|--------------------------|-------------|-------------|
-| `openai` | `openai` | `langchain-openai` | `OPENAI_API_KEY` |
-| `anthropic` | `anthropic` | `langchain-anthropic` | `ANTHROPIC_API_KEY` |
-| `google` | `google_genai` | `langchain-google-genai` | `GOOGLE_API_KEY` |
-| `ollama` | `ollama` | `langchain-ollama` | none (local runtime) |
+| provider | `langgraph` | `eve` | `claude_agents` |
+|----------|-------------|-------|-----------------|
+| `openai` | yes — `OPENAI_API_KEY` | yes — gateway namespace `openai` | error |
+| `anthropic` | yes — `ANTHROPIC_API_KEY` | yes — gateway namespace `anthropic` | yes — `ANTHROPIC_API_KEY` |
+| `google` | yes — `GOOGLE_API_KEY` | yes — gateway namespace `google` | error |
+| `ollama` | yes — no credential (local runtime) | error — the Vercel AI Gateway cannot route a local runtime | error |
+| anything else | error | error | error |
 
-For codegen, `params` keys must additionally be valid Python keyword arguments (`max_tokens`, not `max-tokens`); a key that is not is a codegen error.
+`eve` routes every model through the Vercel AI Gateway and pins it as `<namespace>/<id>`, so its credential is `AI_GATEWAY_API_KEY` (or project OIDC when deployed on Vercel) rather than a per-vendor key.
+
+**LangGraph binding detail.** `langgraph` emits `init_chat_model("<prefix>:<id>", **params)`:
+
+| provider | `init_chat_model` prefix | pip package |
+|----------|--------------------------|-------------|
+| `openai` | `openai` | `langchain-openai` |
+| `anthropic` | `anthropic` | `langchain-anthropic` |
+| `google` | `google_genai` | `langchain-google-genai` |
+| `ollama` | `ollama` | `langchain-ollama` |
+
+For LangGraph codegen, `params` keys must additionally be valid Python keyword arguments (`max_tokens`, not `max-tokens`); a key that is not is a codegen error. `claude_agents` accepts only `speed` and rejects every other key, including `temperature` and `max_tokens`, because the platform's model object exposes `id` and `speed` alone.
  
 ### 3.2 `agent` (.agent file)
  
