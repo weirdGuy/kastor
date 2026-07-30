@@ -19,6 +19,14 @@ v0 exit criteria ([KAS-36](https://linear.app/getkastor/issue/KAS-36)) are met.
   from `KASTOR_MCP_<SERVER>_URL`), http/runtime tools as `defineTool` files
   with Zod schemas. Both example modules build for it (KAS-32)
 
+### Changed
+
+- v0 platform provider selected: Claude Managed Agents. `target
+  "claude_agents"` is the platform target label, authenticating from
+  `ANTHROPIC_API_KEY`; the provider lands in `internal/provider/claude/`.
+  Bedrock AgentCore and Dify are no longer under consideration. Spec only —
+  no provider implementation yet (KAS-37)
+
 ## [0.1.2] - 2026-07-17
 
 ### Fixed

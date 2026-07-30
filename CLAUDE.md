@@ -5,7 +5,7 @@ Kastor is "Terraform for AI agents": a declarative HCL spec compiled to agent fr
 ## What this is
 
 - Go CLI (`kastor`) that parses `.agent`, `.tool`, `.prompt`, and `kastor.hcl` project files
-- Two execution paths: `kastor build` (codegen → LangGraph shipped, eve planned) and `kastor plan/apply` (platform reconciler → provider TBD; candidates: Bedrock AgentCore, Dify)
+- Two execution paths: `kastor build` (codegen → LangGraph and eve shipped) and `kastor plan/apply` (platform reconciler → Claude Managed Agents, selected)
 - Non-goals for v0: being a runtime, executing agents, eval harnesses
 
 ## Architecture
@@ -18,7 +18,7 @@ internal/
   module/           directory walk → symbol table, cross-file reference resolution
   graph/            DAG construction, cycle detection, topo sort
   build/            codegen engine + per-target generators (build/langgraph/, build/eve/, build/crewai/)
-  provider/         platform reconcilers (provider/memory/; TBD — candidates: agentcore/, dify/)
+  provider/         platform reconcilers (provider/memory/, provider/claude/)
   state/            state file read/write, locking, diff
 ```
 
@@ -34,7 +34,7 @@ gofmt -l .                     # formatting check (must be clean)
 
 ## Conventions
 
-- Go 1.22+, standard library first; approved deps: cobra, hashicorp/hcl/v2, go-cmp (tests)
+- Go 1.22+, standard library first; approved deps: cobra, hashicorp/hcl/v2, go-cmp (tests), anthropic-sdk-go (Claude Managed Agents provider)
 - All packages under `internal/` except `cmd/`; no public API surface in v0
 - Errors: wrap with `fmt.Errorf("context: %w", err)`; every user-facing diagnostic states what was found, what was expected, and where — file:line plus block address (e.g. `agent.weather: unknown reference model.fastt`)
 - Table-driven tests; fixtures live in `testdata/` per package (valid + invalid HCL samples)
