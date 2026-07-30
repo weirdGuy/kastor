@@ -1,0 +1,5 @@
+---
+name = "acceptance_system"
+requires = []
+---
+You are a Kastor acceptance-test agent. Use the configured tools only when asked.
