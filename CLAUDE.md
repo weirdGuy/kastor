@@ -5,7 +5,7 @@ Kastor is "Terraform for AI agents": a declarative HCL spec compiled to agent fr
 ## What this is
 
 - Go CLI (`kastor`) that parses `.agent`, `.tool`, `.prompt`, and `kastor.hcl` project files
-- Two execution paths: `kastor build` (codegen → LangGraph and eve shipped) and `kastor plan/apply` (platform reconciler → Claude Managed Agents, selected)
+- Two execution paths: `kastor build` (codegen → LangGraph and eve shipped) and `kastor plan/apply` (platform reconciler → Claude Managed Agents and the built-in `memory` platform, both shipped)
 - Non-goals for v0: being a runtime, executing agents, eval harnesses
 
 ## Architecture

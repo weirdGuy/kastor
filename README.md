@@ -2,7 +2,7 @@
 
 **Kastor is a source-of-truth layer for AI agents.**
 
-Define agents, tools, prompts, models, and targets in HCL. Validate the spec. Compile it to runnable framework code. Later, reconcile hosted agents with Terraform-style `plan` / `apply` / `state`.
+Define agents, tools, prompts, models, and targets in HCL. Validate the spec. Compile it to runnable framework code, or reconcile hosted agents with Terraform-style `plan` / `apply` / `state`.
 
 ```sh
 kastor validate examples/weather
@@ -25,12 +25,13 @@ Working today:
 - validate references and prompt variables
 - build runnable LangGraph and eve projects
 - run `kastor plan` / `kastor apply` / `kastor destroy` against the built-in in-memory platform
+- reconcile hosted [Claude Managed Agents](#quickstart-hosted-claude-agents) with `target "claude_agents"`
 - local state file, three-way diffs, and drift detection
 - examples: [weather agent](examples/weather), [content scheduler](examples/scheduler), [support triage](examples/support-triage)
 
 Planned for v0:
 
-- a hosted platform provider: Claude Managed Agents (selected, not yet implemented)
+- structured `--json` rendering for diagnostics and plans
 
 Kastor is **not** an agent runtime.
 
@@ -50,7 +51,7 @@ Kastor is **not** an agent runtime.
       ▼                   ▼
 kastor build        kastor plan/apply
 framework code      hosted agents
-(LangGraph)         (platform targets)
+(LangGraph, eve)    (Claude Managed Agents)
 ```
 
 Kastor has two paths:
@@ -126,6 +127,192 @@ Plan for target.memory: 3 to create, 0 to update, 0 to delete, 0 unchanged.
 ```
 
 `kastor plan` is a pure read: it never touches remote resources or the state file. Updates show attribute-level diffs, and out-of-band remote changes surface as drift warnings.
+
+## Quickstart: hosted Claude agents
+
+This is the hosted path: `target "claude_agents"` reconciles agents in your
+Anthropic organization through Claude Managed Agents. Unlike `memory`, `apply`
+here creates real remote objects, and `destroy` **archives them irreversibly** —
+read [Destroying a Claude agent](#destroying-a-claude-agent) before you run it.
+
+Prerequisites:
+
+- an Anthropic API key with access to Managed Agents
+- an endpoint URL for every MCP server the module's `mcp` tools name
+
+Write a module — one project file, one agent, two tools, one prompt:
+
+```hcl
+# kastor.hcl
+model "haiku" {
+  provider = "anthropic"
+  id       = "claude-haiku-4-5"
+}
+
+target "claude_agents" {
+  type = "platform"
+
+  auth {
+    api_key_env = "ANTHROPIC_API_KEY"
+  }
+}
+```
+
+```hcl
+# researcher.agent
+agent "researcher" {
+  description = "Answers research questions with web search and a hosted MCP server"
+
+  model         = model.haiku
+  system_prompt = prompt.researcher_system
+
+  tools = [tool.web_search, tool.tavily_search]
+}
+```
+
+```hcl
+# research.tool
+tool "web_search" {
+  description = "Claude's hosted web search"
+
+  returns {
+    type = string
+  }
+
+  source {
+    kind = "builtin"
+  }
+}
+
+tool "tavily_search" {
+  description = "Search the web through Tavily's hosted MCP server"
+
+  param "query" {
+    type = string
+  }
+
+  returns {
+    type = string
+  }
+
+  source {
+    kind = "mcp"
+    uri  = "mcp://search-server/tavily_search"
+  }
+}
+```
+
+```text
+# researcher_system.prompt
+---
+name     = "researcher_system"
+requires = []
+---
+You are a research assistant. Answer concisely and cite your sources.
+```
+
+Two kinds of environment variable:
+
+```sh
+export ANTHROPIC_API_KEY=sk-ant-YOUR-KEY
+export KASTOR_MCP_SEARCH_SERVER_URL="https://mcp.tavily.com/mcp/?tavilyApiKey=tvly-YOUR-KEY"
+```
+
+`ANTHROPIC_API_KEY` is the default credential; the `auth` block above only names
+it explicitly. Any other variable works — `api_key_env = "ANTHROPIC_API_KEY_PROD"`
+— and the `auth` block may be omitted entirely.
+
+MCP endpoints stay out of the spec, exactly as they do for codegen: the `mcp://`
+URI pins server and tool identity only. For each server named in a URI, kastor
+reads `KASTOR_MCP_<SERVER>_URL` — the server name uppercased, with every
+character outside `A-Z0-9` replaced by `_`. So `mcp://search-server/tavily_search`
+needs `KASTOR_MCP_SEARCH_SERVER_URL`. A missing one fails the apply naming the
+variable it wanted.
+
+Plan, then apply:
+
+```console
+$ kastor plan
+  + agent.researcher (not in state)
+
+Plan for target.claude_agents: 1 to create, 0 to update, 0 to delete, 0 unchanged.
+
+$ kastor apply
+  + agent.researcher (not in state)
+
+Plan for target.claude_agents: 1 to create, 0 to update, 0 to delete, 0 unchanged.
+
+Applied target.claude_agents: 1 created, 0 updated, 0 deleted.
+```
+
+Kastor writes the remote id to `kastor.state.json` and stamps
+`metadata.kastor_managed = "agent.researcher"` on the remote agent. That marker is
+an ownership assertion: kastor refuses to compare — and therefore to update — a
+remote agent that does not carry it, so an agent someone created in the Console
+can never be silently overwritten by an apply.
+
+Edit the spec and re-apply, and the change lands as an attribute-level update.
+Change the agent in the Console instead, and the next `plan` reports drift and
+plans the update that converges it back to the spec.
+
+### What `claude_agents` does not support
+
+The Managed Agents resource is narrower than the Kastor agent block, and Kastor
+treats fields that are meaningless for a target as errors rather than ignoring
+them (SPEC.md §3.5). On this target:
+
+| Spec | Result |
+| --- | --- |
+| `source` kind `http`, `script`, or `runtime` | Error. These are client-executed tools, and kastor is not a runtime. Wrap the implementation in an MCP server and declare it `kind = "mcp"`. |
+| `source` kind `builtin` outside the hosted toolset | Error. The hosted set is `bash`, `edit`, `glob`, `grep`, `read`, `web_fetch`, `web_search`, `write`. |
+| `model` with `provider` other than `"anthropic"` | Error. |
+| `params { temperature = ... }`, `max_tokens`, anything but `speed` | Error. The platform's model object exposes `id` and `speed` only, so `speed` is the one param that maps; omitted, it is `standard`. |
+| `input` / `output` blocks | Sent nowhere. Managed Agents has no IO-contract field; the blocks stay valid spec and still drive references and validation, but they are not part of the remote object and never appear in a diff. |
+
+These are **apply-time** errors, not validation errors — see the caveat below.
+
+### Destroying a Claude agent
+
+`kastor destroy` deletes the state entry and **archives** the remote agent.
+Archive is irreversible on this platform: the agent cannot be restored, and it
+stays listed in the Anthropic Console permanently. A later `kastor apply` does
+not resurrect it — it creates a new agent with a new id.
+
+`destroy` reads before archiving, so an agent that is already gone or already
+archived is a no-op, and an archived agent reads as absent — which is why a plan
+after destroy proposes a create rather than an update.
+
+`destroy` does not prompt for confirmation in v0. On this target, run
+`kastor plan` first and read the `-` lines.
+
+### One caveat: these errors arrive at apply, not validate
+
+`kastor validate` is target-agnostic — it parses, resolves references, and checks
+prompt variables, and it knows nothing about any provider. The table above is
+enforced by the provider, when it renders an agent for the platform.
+
+For a resource that already exists in state, that happens during `plan` (the
+provider's `Diff` is what compares it). For a resource kastor has not created
+yet, nothing calls the provider until `apply` — so `kastor plan` on a fresh
+module reports `+ agent.x (not in state)` and exits `0` even when the module can
+never apply:
+
+```console
+$ kastor plan
+  + agent.probe (not in state)
+
+Plan for target.claude_agents: 1 to create, 0 to update, 0 to delete, 0 unchanged.
+
+$ kastor apply
+  + agent.probe (not in state)
+
+Plan for target.claude_agents: 1 to create, 0 to update, 0 to delete, 0 unchanged.
+kastor: agent.probe: create failed (0 of 1 changes applied, state saved): tool.rest: source kind "http" cannot be mapped to Claude Managed Agents; custom tools are client-executed and kastor is not a runtime; use an MCP-server wrapper with source kind "mcp"
+```
+
+Apply stops at the first failure and state records everything applied before it,
+so a re-run plans exactly the remainder — but on this target, treat a clean plan
+as "no remote changes pending", not as "this module is valid for the platform".
 
 ## Quickstart: generate and run LangGraph
 

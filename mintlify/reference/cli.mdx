@@ -196,9 +196,32 @@ These warnings go to stderr and do **not** fail the build: the code was
 generated and synced, so `kastor build` still exits `0`.
 
 Ownership is tracked in the `.kastorbuild` marker at the root of the output
-directory. Deleting it is safe but forgetful — with no record, kastor can no
-longer tell its own untouched stub from your implementation, so it treats every
-existing file as yours.
+directory. Deleting it is safe but forgetful: with no records, kastor can no
+longer tell which stub you last saw, so any file that is not byte-identical to
+the stub it would generate today counts as yours. That is the direction that
+cannot lose your work; the cost is one spurious sidecar per implemented stub.
+
+#### Upgrading from a pre-manifest build
+
+`.kastorbuild` used to be a one-line marker: proof that kastor owned the
+directory, and nothing more. It is now a versioned manifest that also records,
+per preserve-mode file, the SHA-256 of the stub kastor last wrote there and
+whether you have since edited it.
+
+An output directory built by an older kastor has a marker with no records, so
+the first build after upgrading has no history to consult:
+
+| File in that directory | First build after upgrading |
+| --- | --- |
+| An untouched stub | Still byte-identical to the freshly generated stub, so kastor recognizes it as its own. Nothing happens. |
+| A stub you implemented | Treated as yours and left alone — correct, and the only direction that cannot destroy your code. But with no record of the stub you last saw, kastor cannot tell your edits from a spec change, so it writes a `<name>.kastor-new` sidecar and reports it once. |
+
+For that second row, diff the pair, confirm the interface has not actually moved
+under you, and delete the sidecar. The manifest is written with real records from
+that build onward, so it happens exactly once per implemented stub.
+
+A marker written by a *newer* kastor than the one you are running is a hard
+error rather than a guess — upgrade, or build into a different directory.
 
 ## `kastor plan`
 
@@ -214,19 +237,18 @@ Example:
 kastor plan examples/weather
 ```
 
-`plan` is a pure read. It should not modify remote resources or write the state file.
+`plan` is a pure read. It only issues the provider's `Read` and `Diff` calls, and it never writes the state file.
 
-Implemented provider:
+Implemented providers:
 
 | Target label | Status |
 | --- | --- |
+| `claude_agents` | Implemented. Claude Managed Agents, the hosted provider. See [platform providers](#platform-providers). |
 | `memory` | Implemented. Ephemeral in-memory provider for local demos and tests. |
 
-Planned provider:
-
-| Target label | Status |
-| --- | --- |
-| `claude_agents` | Planned for v0. Claude Managed Agents is the selected provider; nothing registered in the current CLI yet. |
+<Warning>
+  A clean plan is not a validity check. For a resource kastor has not created yet there is no remote object to read and nothing calls the provider, so provider-level errors — an unsupported tool kind, an unsupported model param — do not appear until `kastor apply`.
+</Warning>
 
 ## `kastor apply`
 
@@ -252,7 +274,57 @@ Delete all resources tracked in state for selected platform targets.
 kastor destroy [--target name] [dir]
 ```
 
-`destroy` deletes resources in reverse dependency order and updates state after each deletion.
+`destroy` deletes resources in reverse dependency order and updates state after each deletion. It does not prompt for confirmation in v0.
+
+<Warning>
+  On `target "claude_agents"`, delete means **archive**, and archive is irreversible. The agent cannot be restored and stays listed in the Anthropic Console permanently. A later `kastor apply` does not resurrect it — it creates a new agent with a new id. Run `kastor plan` first and read the `-` lines.
+</Warning>
+
+## Platform providers
+
+A platform target's label selects its provider. Two are registered.
+
+### `memory`
+
+The built-in in-memory platform: an ephemeral store so `plan` / `apply` / `destroy` can be exercised with no credentials and no network. `auth` on it is an error. Its remote objects die with the process, so a later invocation truthfully reports previously applied resources as remote-missing drift.
+
+### `claude_agents`
+
+Claude Managed Agents. Each `agent` block becomes one hosted agent; its model, system prompt, and tools are folded into that one remote object.
+
+Credentials come from `ANTHROPIC_API_KEY` by default. An `auth` block renames the variable:
+
+```hcl
+target "claude_agents" {
+  type = "platform"
+
+  auth {
+    api_key_env = "ANTHROPIC_API_KEY_PROD"
+  }
+}
+```
+
+Every MCP server named by a tool's `mcp://<server>/<tool>` URI needs an endpoint URL in the environment, under `KASTOR_MCP_<SERVER>_URL` — the server name uppercased, with every character outside `A-Z0-9` replaced by `_`. `mcp://search-server/tavily_search` reads `KASTOR_MCP_SEARCH_SERVER_URL`.
+
+Kastor stamps `metadata.kastor_managed = "<block address>"` on every agent it creates and refuses to compare a remote agent that does not carry the marker, so an agent created by hand in the Console cannot be overwritten by an apply.
+
+The Managed Agents resource is narrower than the Kastor agent block, and fields that are meaningless for a target are errors rather than silently ignored:
+
+| Spec | Result on `claude_agents` |
+| --- | --- |
+| `source { kind = "mcp" }` | Supported. Becomes an `mcp_toolset` entry plus an `mcp_servers` URL entry. |
+| `source { kind = "builtin" }` | Supported for the hosted toolset: `bash`, `edit`, `glob`, `grep`, `read`, `web_fetch`, `web_search`, `write`. Any other name is an error. |
+| `source` kind `http`, `script`, or `runtime` | Error. These are client-executed tools and kastor is not a runtime. Wrap the implementation in an MCP server and declare it `kind = "mcp"`. |
+| `model` with `provider` other than `"anthropic"` | Error. |
+| `params { speed = ... }` | Supported. Omitted, the platform model speed is `standard`. |
+| `params { temperature = ... }`, `max_tokens`, any other key | Error. The platform's model object exposes `id` and `speed` only. |
+| `input` / `output` blocks | Not sent. Managed Agents has no IO-contract field. The blocks stay valid spec and still drive references and validation, but they are not part of the remote object and never appear in a diff. |
+
+<Warning>
+  Every row above is enforced by the provider, not by `kastor validate` — which is target-agnostic and knows nothing about any provider. For a resource already in state the check runs during `plan`; for one kastor has not created yet, nothing calls the provider until `apply`.
+</Warning>
+
+Failures are classified: authentication (`401`/`403`, naming the env var to check), not-found, out-of-band update conflict (`409`, telling you to re-run `kastor plan`), and transient (`429`/`5xx`), which is retried to a total of three attempts, honoring `Retry-After`. Apply stops at the first failure with everything applied up to that point already saved in state, so a re-run plans exactly the remainder.
 
 ## `kastor fmt`
 

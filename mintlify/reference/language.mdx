@@ -100,15 +100,15 @@ Rules:
 - Parameter defaults must be literals of the declared type.
 - `default = null` is invalid. Omit the attribute instead.
 
-Source kinds:
+Source kinds. Every kind parses; what a kind means is decided by the target that consumes it.
 
-| Kind | Current behavior |
-| --- | --- |
-| `mcp` | Parsed and supported by LangGraph codegen through generated MCP bindings. |
-| `http` | Parsed and supported by LangGraph codegen as a POST wrapper. |
-| `runtime` | Parsed and supported by LangGraph codegen as a stub for user code. The stub is generated once: after you edit it, later builds keep your file, and a spec change arrives as a `<name>.kastor-new` sidecar to reconcile. |
-| `builtin` | Parsed for platform targets; not valid for local LangGraph codegen. |
-| `script` | Parsed, but LangGraph execution glue is deferred. |
+| Kind | LangGraph codegen | `claude_agents` platform |
+| --- | --- | --- |
+| `mcp` | Generated MCP binding. | Supported: an `mcp_toolset` entry plus an endpoint from `KASTOR_MCP_<SERVER>_URL`. |
+| `http` | POST wrapper. | Error — wrap it in an MCP server instead. |
+| `runtime` | Stub for user code. The stub is generated once: after you edit it, later builds keep your file, and a spec change arrives as a `<name>.kastor-new` sidecar to reconcile. | Error — wrap it in an MCP server instead. |
+| `builtin` | Codegen error, permanently: a platform-provided tool has no local binding. | Supported for the hosted toolset (`bash`, `edit`, `glob`, `grep`, `read`, `web_fetch`, `web_search`, `write`). |
+| `script` | Codegen error for now; execution glue is deferred. | Error — wrap it in an MCP server instead. |
 
 ## `.prompt`
 
@@ -167,7 +167,7 @@ target "memory" {
 | --- | --- | --- |
 | `provider` | required | Provider name such as `openai`, `anthropic`, `google`, or `ollama`. |
 | `id` | required | Provider model identifier. |
-| `params` | optional | Provider-specific key/value bag. |
+| `params` | optional | Provider-specific key/value bag. Keys are not checked at parse time — the consuming target validates them. LangGraph codegen requires valid Python keyword arguments; `claude_agents` accepts `speed` and rejects everything else, including `temperature` and `max_tokens`. |
 
 `target` fields:
 
@@ -180,9 +180,11 @@ target "memory" {
 Target labels select implementations:
 
 - `target "langgraph"` selects the LangGraph code generator.
-- `target "memory"` selects the built-in in-memory platform provider.
 - `target "eve"` selects the Vercel eve code generator.
-- `target "claude_agents"` is planned (Claude Managed Agents); it is not registered in the current provider registry.
+- `target "memory"` selects the built-in in-memory platform provider.
+- `target "claude_agents"` selects the Claude Managed Agents provider. Its `auth` block defaults to `api_key_env = "ANTHROPIC_API_KEY"`; see [platform providers](/reference/cli#platform-providers) for what it does and does not accept.
+
+A label with no registered generator or provider is an error naming the ones that exist.
 
 ## File discovery
 

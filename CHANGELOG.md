@@ -34,13 +34,34 @@ v0 exit criteria ([KAS-36](https://linear.app/getkastor/issue/KAS-36)) are met.
   directory's `.kastorbuild` marker; a directory with no record is treated as
   the user's. Both codegen targets (langgraph, eve) are covered (KAS-24)
 
+  **Upgrade note.** `.kastorbuild` was a one-line marker and is now a versioned
+  manifest recording, per stub, the hash of what kastor last wrote and whether
+  you have edited it. An output directory built by an older kastor has no
+  records, so the first build after upgrading has no history: an untouched stub
+  is still byte-identical to the fresh one and is recognized as kastor's, but a
+  stub you implemented is treated as yours — correct, and the only direction
+  that cannot destroy your code — and arrives with one `.kastor-new` sidecar and
+  one warning, because kastor cannot tell your edits from a spec change. Diff
+  the pair, delete the sidecar; from that build on the manifest has real records
+  and it does not recur.
+
 ### Changed
 
 - v0 platform provider selected: Claude Managed Agents. `target
   "claude_agents"` is the platform target label, authenticating from
   `ANTHROPIC_API_KEY`; the provider lands in `internal/provider/claude/`.
-  Bedrock AgentCore and Dify are no longer under consideration. Spec only —
-  no provider implementation yet (KAS-37)
+  Bedrock AgentCore and Dify are no longer under consideration (KAS-37)
+- Docs audited against the shipped code (KAS-41). README, the docs site, and
+  the Mintlify authoring rules no longer describe hosted providers as planned.
+  Added: a worked `claude_agents` quickstart (module, `ANTHROPIC_API_KEY`,
+  `KASTOR_MCP_<SERVER>_URL` per MCP server, plan/apply transcript); the
+  irreversibility of `kastor destroy` on that target, which archives the agent
+  and leaves it listed in the Console forever; what the target rejects — tool
+  sources `http`, `script`, and `runtime`, model params other than `speed`, a
+  non-`anthropic` model provider — and that `input`/`output` blocks have no
+  counterpart in the remote object; and the fact that all of those are
+  apply-time errors, since `kastor validate` is target-agnostic and `plan`
+  calls no provider for a resource that is not yet in state
 
 ## [0.1.2] - 2026-07-17
 

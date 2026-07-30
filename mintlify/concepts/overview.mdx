@@ -58,7 +58,7 @@ tool "web_search" {
 }
 ```
 
-Implemented parser support includes `mcp`, `http`, `builtin`, `runtime`, and `script` source kinds. LangGraph codegen supports `mcp`, `http`, and `runtime`; `builtin` is platform-only, and `script` glue is deferred.
+Implemented parser support includes `mcp`, `http`, `builtin`, `runtime`, and `script` source kinds. What a kind means is the target's decision: LangGraph and eve codegen support `mcp`, `http`, and `runtime`, while the `claude_agents` platform supports `mcp` and `builtin`. `script` glue is deferred everywhere. See the [source kinds table](/reference/language#tool) for the full matrix.
 
 ## Prompts
 
