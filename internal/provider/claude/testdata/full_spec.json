@@ -2,12 +2,7 @@
   "description": "Answers engineering questions",
   "model": {
     "provider": "anthropic",
-    "id": "claude-opus-5",
-    "params": {
-      "effort": {
-        "type": "high"
-      }
-    }
+    "id": "claude-opus-5"
   },
   "instructions": "Use the available tools and cite concrete evidence.",
   "tools": [

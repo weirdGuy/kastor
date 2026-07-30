@@ -4,9 +4,6 @@
   "name": "weather",
   "model": {
     "id": "claude-opus-5",
-    "effort": {
-      "type": "high"
-    },
     "speed": "standard"
   },
   "system": "Use the available tools and cite concrete evidence.",
@@ -37,7 +34,7 @@
       "default_config": {
         "enabled": false,
         "permission_policy": {
-          "type": "always_allow"
+          "type": "always_ask"
         }
       },
       "configs": [

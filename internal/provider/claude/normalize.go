@@ -2,6 +2,7 @@ package claude
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 
@@ -39,7 +40,6 @@ var managedAgentTools = map[string]bool{
 // operator-owned and do not participate in comparison.
 type normalizationRules struct {
 	metadataKeys map[string]bool
-	modelKeys    map[string]bool
 }
 
 // normalizeForDiff returns two independent comparison objects with all
@@ -80,7 +80,7 @@ func normalizeSpec(desired *provider.Resource) (provider.Object, normalizationRu
 		return nil, normalizationRules{}, fmt.Errorf("%s: desired config is nil", desired.Addr)
 	}
 
-	model, modelKeys, err := normalizeSpecModel(desired.Addr, cfg["model"])
+	model, err := normalizeSpecModel(desired.Addr, cfg["model"])
 	if err != nil {
 		return nil, normalizationRules{}, err
 	}
@@ -120,7 +120,6 @@ func normalizeSpec(desired *provider.Resource) (provider.Object, normalizationRu
 	}
 	return spec, normalizationRules{
 		metadataKeys: metadataKeys,
-		modelKeys:    modelKeys,
 	}, nil
 }
 
@@ -137,7 +136,7 @@ func normalizeAPIEcho(remote provider.Object, rules normalizationRules) (provide
 	if err != nil {
 		return nil, err
 	}
-	model, err := normalizeEchoModel(remote["model"], rules.modelKeys)
+	model, err := normalizeEchoModel(remote["model"])
 	if err != nil {
 		return nil, err
 	}
@@ -186,48 +185,48 @@ func normalizeAPIEcho(remote provider.Object, rules normalizationRules) (provide
 	}, nil
 }
 
-func normalizeSpecModel(addr string, raw any) (map[string]any, map[string]bool, error) {
+func normalizeSpecModel(addr string, raw any) (map[string]any, error) {
 	obj, ok := raw.(map[string]any)
 	if !ok {
-		return nil, nil, fmt.Errorf("%s: model must be an object, got %T", addr, raw)
+		return nil, fmt.Errorf("%s: model must be an object, got %T", addr, raw)
 	}
 	providerName, err := requiredString(obj["provider"], addr+".model.provider")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if providerName != "anthropic" {
-		return nil, nil, fmt.Errorf("%s: model.provider is %q, expected %q for Claude Managed Agents", addr, providerName, "anthropic")
+		return nil, fmt.Errorf("%s: model.provider is %q, expected %q for Claude Managed Agents", addr, providerName, "anthropic")
 	}
 	id, err := requiredString(obj["id"], addr+".model.id")
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	model := map[string]any{"id": id, "speed": defaultModelSpeed}
-	keys := map[string]bool{"id": true, "speed": true}
 	if rawParams, exists := obj["params"]; exists {
 		params, ok := rawParams.(map[string]any)
 		if !ok {
-			return nil, nil, fmt.Errorf("%s: model.params must be an object, got %T", addr, rawParams)
+			return nil, fmt.Errorf("%s: model.params must be an object, got %T", addr, rawParams)
 		}
 		for key, value := range params {
-			model[key] = cloneValue(value)
-			keys[key] = true
+			if key != "speed" {
+				return nil, fmt.Errorf("%s: model.params.%s is unsupported by Claude Managed Agents, expected only \"speed\"", addr, key)
+			}
+			speed, err := requiredString(value, addr+".model.params.speed")
+			if err != nil {
+				return nil, err
+			}
+			model["speed"] = speed
 		}
 	}
-	if speed, ok := model["speed"]; ok {
-		if _, err := requiredString(speed, addr+".model.params.speed"); err != nil {
-			return nil, nil, err
-		}
-	}
-	return model, keys, nil
+	return model, nil
 }
 
 // normalizeEchoModel accepts both API request forms. String models are
 // lifted to the response object form and omitted speed defaults to standard.
-// Response-only defaults such as effort are ignored unless the spec owns the
-// corresponding model param.
-func normalizeEchoModel(raw any, owned map[string]bool) (map[string]any, error) {
+// The current SDK's BetaManagedAgentsModelConfig and Params types expose only
+// id and speed; unknown response fields are not part of the compared object.
+func normalizeEchoModel(raw any) (map[string]any, error) {
 	switch model := raw.(type) {
 	case string:
 		if model == "" {
@@ -240,14 +239,6 @@ func normalizeEchoModel(raw any, owned map[string]bool) (map[string]any, error) 
 			return nil, err
 		}
 		out := map[string]any{"id": id, "speed": defaultModelSpeed}
-		for key := range owned {
-			if key == "id" || key == "speed" {
-				continue
-			}
-			if value, exists := model[key]; exists {
-				out[key] = cloneValue(value)
-			}
-		}
 		if speed, exists := model["speed"]; exists {
 			value, err := requiredString(speed, "remote.model.speed")
 			if err != nil {
@@ -361,12 +352,15 @@ func normalizeSpecTools(addr string, raw any) ([]any, []any, error) {
 				group = newToolset(mcpToolsetType, server)
 				groups[key] = group
 				tools = append(tools, group.object)
-				// SPEC.md makes source.uri an identity pin, not deployment
-				// transport. The API echo's required URL is therefore
-				// intentionally projected out by normalizeEchoMCPServers.
+				env := mcpServerURLEnvName(server)
+				endpoint, exists := os.LookupEnv(env)
+				if !exists || endpoint == "" {
+					return nil, nil, fmt.Errorf("%s: MCP server %q has no endpoint URL; set %s", blockAddr, server, env)
+				}
 				mcpServers = append(mcpServers, map[string]any{
 					"type": "url",
 					"name": server,
+					"url":  endpoint,
 				})
 			}
 			group.configs = append(group.configs, enabledTool(toolName))
@@ -383,6 +377,7 @@ func normalizeSpecTools(addr string, raw any) ([]any, []any, error) {
 	if tools == nil {
 		tools = []any{}
 	}
+	tools = normalizeSpecToolsetDefaults(tools)
 	if mcpServers == nil {
 		mcpServers = []any{}
 	}
@@ -390,19 +385,39 @@ func normalizeSpecTools(addr string, raw any) ([]any, []any, error) {
 }
 
 func newToolset(typ, server string) *toolsetBuilder {
+	defaultConfig := map[string]any{"enabled": false}
+	if typ == agentToolsetType {
+		defaultConfig["permission_policy"] = map[string]any{
+			"type": "always_allow",
+		}
+	}
 	obj := map[string]any{
-		"type": typ,
-		"default_config": map[string]any{
-			"enabled": false,
-			"permission_policy": map[string]any{
-				"type": "always_allow",
-			},
-		},
+		"type":           typ,
+		"default_config": defaultConfig,
 	}
 	if server != "" {
 		obj["mcp_server_name"] = server
 	}
 	return &toolsetBuilder{object: obj}
+}
+
+// normalizeSpecToolsetDefaults applies the API's resolved response defaults
+// to the comparison copy. The request shape produced by newToolset deliberately
+// omits the MCP permission policy so the platform keeps its safe always_ask
+// default rather than Kastor authoring an approval override.
+func normalizeSpecToolsetDefaults(tools []any) []any {
+	normalized := cloneValue(tools).([]any)
+	for _, value := range normalized {
+		toolset := value.(map[string]any)
+		if toolset["type"] != mcpToolsetType {
+			continue
+		}
+		defaultConfig := toolset["default_config"].(map[string]any)
+		defaultConfig["permission_policy"] = map[string]any{
+			"type": "always_ask",
+		}
+	}
+	return normalized
 }
 
 func enabledTool(name string) map[string]any {
@@ -424,6 +439,22 @@ func parseMCPIdentity(addr, uri string) (string, string, error) {
 		return "", "", fmt.Errorf("%s: MCP source uri is %q, expected mcp://<server>/<tool>", addr, uri)
 	}
 	return server, tool, nil
+}
+
+// mcpServerURLEnvName matches the eve target's deployment convention:
+// characters outside [A-Za-z0-9] become underscores.
+func mcpServerURLEnvName(server string) string {
+	var name strings.Builder
+	name.WriteString("KASTOR_MCP_")
+	for _, r := range strings.ToUpper(server) {
+		if r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
+			name.WriteRune(r)
+		} else {
+			name.WriteByte('_')
+		}
+	}
+	name.WriteString("_URL")
+	return name.String()
 }
 
 func normalizeEchoTools(tools []any) ([]any, error) {
@@ -453,7 +484,11 @@ func normalizeEchoMCPServers(servers []any) ([]any, error) {
 		if err != nil {
 			return nil, err
 		}
-		out[i] = map[string]any{"type": typ, "name": name}
+		url, err := requiredString(obj["url"], fmt.Sprintf("remote.mcp_servers[%d].url", i))
+		if err != nil {
+			return nil, err
+		}
+		out[i] = map[string]any{"type": typ, "name": name, "url": url}
 	}
 	return out, nil
 }

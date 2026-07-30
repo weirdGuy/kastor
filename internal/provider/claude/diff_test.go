@@ -21,8 +21,12 @@ func TestDiffGoldenResponsesAreInSync(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.addr, func(t *testing.T) {
+			desired := &provider.Resource{Addr: tt.addr, Config: loadObject(t, tt.spec)}
+			if tt.addr == "agent.weather" {
+				desired = fullResource(t)
+			}
 			diffs, err := New().Diff(
-				&provider.Resource{Addr: tt.addr, Config: loadObject(t, tt.spec)},
+				desired,
 				loadObject(t, tt.response),
 			)
 			if err != nil {
@@ -36,7 +40,7 @@ func TestDiffGoldenResponsesAreInSync(t *testing.T) {
 }
 
 func TestDiffScalarsAreSortedAndDirectional(t *testing.T) {
-	desired := &provider.Resource{Addr: "agent.weather", Config: loadObject(t, "full_spec.json")}
+	desired := fullResource(t)
 	remote := loadObject(t, "full_api_response.json")
 	remote["description"] = "Old description"
 	remote["system"] = "Old system"
@@ -57,7 +61,7 @@ func TestDiffScalarsAreSortedAndDirectional(t *testing.T) {
 }
 
 func TestDiffReplaceArraysPerElementAndOrderSensitively(t *testing.T) {
-	desired := &provider.Resource{Addr: "agent.weather", Config: loadObject(t, "full_spec.json")}
+	desired := fullResource(t)
 	remote := loadObject(t, "full_api_response.json")
 	tools := remote["tools"].([]any)
 	tools[0], tools[1] = tools[1], tools[0]
@@ -120,7 +124,7 @@ func TestDiffEveryReplaceArrayIsOrderSensitive(t *testing.T) {
 }
 
 func TestDiffChangeInsideToolRendersAtElement(t *testing.T) {
-	desired := &provider.Resource{Addr: "agent.weather", Config: loadObject(t, "full_spec.json")}
+	desired := fullResource(t)
 	remote := loadObject(t, "full_api_response.json")
 	config := remote["tools"].([]any)[0].(map[string]any)["configs"].([]any)[0].(map[string]any)
 	config["enabled"] = false
@@ -136,7 +140,7 @@ func TestDiffChangeInsideToolRendersAtElement(t *testing.T) {
 
 func TestDiffMetadataOwnershipAndDeletion(t *testing.T) {
 	t.Run("foreign keys ignored and owned keys compared", func(t *testing.T) {
-		desired := &provider.Resource{Addr: "agent.weather", Config: loadObject(t, "full_spec.json")}
+		desired := fullResource(t)
 		remote := loadObject(t, "full_api_response.json")
 		metadata := remote["metadata"].(map[string]any)
 		metadata["console_note"] = "changed foreign value"
@@ -221,8 +225,8 @@ func TestDiffManagedMarkerIsAnAssertionNotAnAttrDiff(t *testing.T) {
 	}
 }
 
-func TestDiffIgnoresEnvelopeTimestampsForeignModelDefaultsAndMCPURL(t *testing.T) {
-	desired := &provider.Resource{Addr: "agent.weather", Config: loadObject(t, "full_spec.json")}
+func TestDiffIgnoresEnvelopeTimestampsAndForeignModelFields(t *testing.T) {
+	desired := fullResource(t)
 	remote := loadObject(t, "full_api_response.json")
 	remote["id"] = "agent_changed_envelope"
 	remote["type"] = "new_agent_envelope"
@@ -231,7 +235,6 @@ func TestDiffIgnoresEnvelopeTimestampsForeignModelDefaultsAndMCPURL(t *testing.T
 	remote["updated_at"] = "today"
 	remote["archived_at"] = "tomorrow"
 	remote["model"].(map[string]any)["server_default_added_later"] = true
-	remote["mcp_servers"].([]any)[0].(map[string]any)["url"] = "https://deployment.example.com/mcp"
 
 	got, err := New().Diff(desired, remote)
 	if err != nil || len(got) != 0 {
@@ -239,8 +242,22 @@ func TestDiffIgnoresEnvelopeTimestampsForeignModelDefaultsAndMCPURL(t *testing.T
 	}
 }
 
+func TestDiffReportsMCPServerURLDrift(t *testing.T) {
+	desired := fullResource(t)
+	remote := loadObject(t, "full_api_response.json")
+	remote["mcp_servers"].([]any)[0].(map[string]any)["url"] = "https://deployment.example.com/mcp"
+
+	got, err := New().Diff(desired, remote)
+	if err != nil {
+		t.Fatalf("Diff: %v", err)
+	}
+	if diff := cmp.Diff([]string{"mcp_servers[0]"}, paths(got)); diff != "" {
+		t.Errorf("MCP URL diff path mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestDiffIsPureAndDeterministic(t *testing.T) {
-	desired := &provider.Resource{Addr: "agent.weather", Config: loadObject(t, "full_spec.json")}
+	desired := fullResource(t)
 	remote := loadObject(t, "full_api_response.json")
 	remote["description"] = "drift"
 	remote["skills"] = []any{"skill_2", "skill_1"}

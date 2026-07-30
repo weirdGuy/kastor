@@ -4,9 +4,6 @@
   "name": "minimal",
   "model": {
     "id": "claude-sonnet-4-5",
-    "effort": {
-      "type": "high"
-    },
     "speed": "standard"
   },
   "system": null,
