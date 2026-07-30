@@ -22,6 +22,13 @@ tool "create_draft" {
   # Typefully v2 REST API instead, in place at
   # gen/langgraph/tools/create_draft.py — kastor build writes that stub once
   # and keeps your implementation on every build after.
+  #
+  # That file is intentionally not tracked: examples/**/gen/ is ignored, and
+  # committing one file back into an output directory would also mean
+  # committing its .kastorbuild marker. The implementation is preserved as a
+  # worked example in the docs instead (mintlify/reference/cli.mdx, "Generated
+  # output is disposable"), so `kastor build` here regenerates an unimplemented
+  # stub that raises NotImplementedError until you fill it in.
   source {
     kind = "runtime"
   }
