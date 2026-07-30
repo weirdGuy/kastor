@@ -19,8 +19,8 @@ var scaffoldFS embed.FS
 
 // scaffolds maps a --target value to its embedded scaffold directory: one
 // entry per codegen target kastor can pre-configure, mirroring the
-// generators map in build.go. eve joins when its generator ships (KAS-32) —
-// scaffolding it earlier would emit a module kastor build cannot build.
+// generators map in build.go. eve's generator has shipped (KAS-32) but it
+// has no scaffold yet, so --target eve is still a usage error here.
 var scaffolds = map[string]string{
 	"langgraph": "scaffold/langgraph",
 }

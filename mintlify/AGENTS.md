@@ -26,7 +26,7 @@
 
 ## Content boundaries
 
-- Do not claim support for a specific hosted platform provider; selection is TBD (candidates: Bedrock AgentCore, Dify). Never present OpenAI Assistants or Bedrock Agents Classic as targets — both are sunset.
+- Claude Managed Agents is the selected v0 hosted platform provider (`target "claude_agents"`), but it is not implemented yet — mark it planned, and do not document it as working. `target "memory"` is the only platform target that runs today. Never present OpenAI Assistants or Bedrock Agents Classic as targets — both are sunset.
 - Do not claim package-manager installation exists unless verified.
 - Do not document `adl.hcl` as implemented unless the parser supports it.
 - Do not document `kastor compile`; use `kastor build`.
