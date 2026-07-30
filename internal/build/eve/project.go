@@ -69,6 +69,9 @@ func (pb *projectBuilder) genReadme() []byte {
 	b.WriteString("build rewrites them and removes visible files it did not generate — that\n")
 	b.WriteString("includes `node_modules/` and `package-lock.json`, so re-run `npm install`\n")
 	b.WriteString("after rebuilding. Hidden entries (`.eve/`, `.env.local`, …) are left alone.\n")
+	if len(pb.runtime) > 0 {
+		b.WriteString("\nThe one exception is a `runtime` tool stub — that file is yours to implement\nand is never rewritten once you edit it. See Runtime tools below.\n")
+	}
 
 	b.WriteString("\n## Setup\n\n```sh\nnpm install\nnpx eve build\nnpx eve dev\n```\n\n")
 	b.WriteString("An eve agent is an ordinary Vercel project: `vercel deploy` ships it unchanged.\n")
@@ -133,7 +136,7 @@ func (pb *projectBuilder) writeRuntime(b *strings.Builder) {
 	if len(pb.runtime) == 0 {
 		return
 	}
-	b.WriteString("\n## Runtime tools\n\nTools with `kind = \"runtime\"` are generated as stubs that throw until you\nsupply the body. `kastor build` regenerates them on every run, so keep the\nreal implementation in code you own and call it from the stub:\n\n")
+	b.WriteString("\n## Runtime tools\n\nTools with `kind = \"runtime\"` are generated as stubs that throw until you\nsupply the body. `kastor build` writes such a stub once and then leaves the file\nalone, so your implementation survives later builds. If the spec changes a tool\nyou have already implemented, the build writes the new stub beside your file as\n`<name>.ts.kastor-new` and reports it — reconcile the two, then delete the\nsidecar.\n\n")
 	for _, t := range sortedCopy(pb.runtime, (*schema.Tool).Addr) {
 		fmt.Fprintf(b, "- `%s`\n", t.Addr())
 	}

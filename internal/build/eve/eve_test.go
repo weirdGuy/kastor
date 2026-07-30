@@ -157,6 +157,42 @@ func TestGenerateUnbound(t *testing.T) {
 	}
 }
 
+// TestGenerateRuntimeToolIsPreserved pins the ownership half of the runtime
+// stub contract: the stub file — and only the stub file — is generated in
+// preserve mode, and its TODO tells the user what that means, naming the
+// sidecar path build.Write would actually use.
+func TestGenerateRuntimeToolIsPreserved(t *testing.T) {
+	job := loadJob(t, filepath.Join("testdata", "runtime_tool"), "dev")
+	files := buildtest.AssertDeterministic(t, eve.Generator{}, job)
+
+	var preserved []string
+	stub := ""
+	for _, f := range files {
+		if f.Preserve {
+			preserved = append(preserved, f.Path)
+		}
+		if f.Path == "helper/agent/tools/lookup.ts" {
+			stub = string(f.Data)
+		}
+	}
+	if diff := cmp.Diff([]string{"helper/agent/tools/lookup.ts"}, preserved); diff != "" {
+		t.Errorf("preserve-mode files (-want +got):\n%s", diff)
+	}
+
+	for _, want := range []string{
+		"leaves the file alone",
+		"lookup.ts" + build.SidecarSuffix,
+		"throw new Error",
+	} {
+		if !strings.Contains(stub, want) {
+			t.Errorf("generated stub does not mention %q:\n%s", want, stub)
+		}
+	}
+	if strings.Contains(stub, "regenerates") {
+		t.Errorf("generated stub still advertises being regenerated:\n%s", stub)
+	}
+}
+
 // TestGenerateErrors covers the specs the eve target must reject: each
 // fixture is a valid Kastor module whose agent binds a block with no eve
 // mapping. (Unbound blocks never error — they are skipped, see

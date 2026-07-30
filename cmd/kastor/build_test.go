@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/weirdGuy/kastor/internal/build"
 	"github.com/weirdGuy/kastor/internal/state"
 )
 
@@ -304,6 +305,98 @@ func TestBuildCommandCountIgnoresUserArtifacts(t *testing.T) {
 	}
 	if _, err := os.Stat(dummy); err != nil {
 		t.Errorf("planted user artifact must survive a rebuild: %v", err)
+	}
+}
+
+// TestBuildCommandKeepsRuntimeImplementation is the end-to-end version of the
+// runtime stub contract (KAS-24), on the one example that has such a tool: an
+// implemented stub survives a rebuild, and a spec change that lands under it
+// reaches the user through a sidecar and a warning instead of overwriting the
+// implementation — once, not on every build after.
+func TestBuildCommandKeepsRuntimeImplementation(t *testing.T) {
+	dir := copyModule(t, filepath.Join("..", "..", "examples", "scheduler"))
+	if out, err := runBuildCmd(t, dir); err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out)
+	}
+
+	stub := filepath.Join(dir, "gen", "langgraph", "tools", "create_draft.py")
+	sidecar := filepath.Join(dir, "gen", "langgraph", "tools", "create_draft.py"+build.SidecarSuffix)
+	const impl = "# my implementation\ndef create_draft(content):\n    return \"scheduled\"\n"
+	if err := os.WriteFile(stub, []byte(impl), 0o644); err != nil {
+		t.Fatalf("implementing the stub: %v", err)
+	}
+
+	out, err := runBuildCmd(t, dir)
+	if err != nil {
+		t.Fatalf("rebuild Execute() error = %v\noutput:\n%s", err, out)
+	}
+	if got, err := os.ReadFile(stub); err != nil || string(got) != impl {
+		t.Fatalf("rebuild clobbered the implementation: %q (err %v)", got, err)
+	}
+	if _, err := os.Stat(sidecar); !os.IsNotExist(err) {
+		t.Errorf("unchanged spec should not write a sidecar, stat err = %v", err)
+	}
+	if strings.Contains(out, "changed under your implementation") {
+		t.Errorf("unchanged spec should report nothing:\n%s", out)
+	}
+
+	// The spec moves: a new param changes the generated interface.
+	toolFile := filepath.Join(dir, "create_draft.tool")
+	spec, err := os.ReadFile(toolFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	added := strings.Replace(string(spec), "  returns {",
+		"  param \"thread\" {\n    type    = bool\n    default = false\n  }\n\n  returns {", 1)
+	if added == string(spec) {
+		t.Fatal("fixture changed: could not add a param to create_draft.tool")
+	}
+	if err := os.WriteFile(toolFile, []byte(added), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err = runBuildCmd(t, dir)
+	if err != nil {
+		t.Fatalf("Execute() after spec change error = %v\noutput:\n%s", err, out)
+	}
+	if got, err := os.ReadFile(stub); err != nil || string(got) != impl {
+		t.Fatalf("spec change clobbered the implementation: %q (err %v)", got, err)
+	}
+	fresh, err := os.ReadFile(sidecar)
+	if err != nil {
+		t.Fatalf("spec change must leave the new stub in a sidecar: %v", err)
+	}
+	if !strings.Contains(string(fresh), "thread") {
+		t.Errorf("sidecar does not carry the new interface:\n%s", fresh)
+	}
+	for _, want := range []string{"changed under your implementation", "create_draft.py", build.SidecarSuffix, "fix:"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("build output missing %q:\n%s", want, out)
+		}
+	}
+	// The warning is not a failure: the code was generated and synced, so the
+	// command returns no error and main.go exits 0. (exitCode is not the check
+	// here — it maps a non-nil error to a status and is never called on nil.)
+	if err != nil {
+		t.Errorf("supersede warning failed the build: %v", err)
+	}
+	if !strings.Contains(out, "Built target langgraph:") {
+		t.Errorf("supersede warning suppressed the success line:\n%s", out)
+	}
+
+	// The sidecar is the durable half of that message, so the warning is not
+	// repeated on every later build — and the sidecar, a visible file no build
+	// generates, must survive the stale sweep that removes everything else the
+	// build did not produce.
+	out, err = runBuildCmd(t, dir)
+	if err != nil {
+		t.Fatalf("second rebuild Execute() error = %v\noutput:\n%s", err, out)
+	}
+	if strings.Contains(out, "changed under your implementation") {
+		t.Errorf("warning repeated on an unchanged rebuild:\n%s", out)
+	}
+	if _, err := os.Stat(sidecar); err != nil {
+		t.Errorf("sidecar must survive a rebuild: %v", err)
 	}
 }
 

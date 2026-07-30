@@ -19,6 +19,18 @@ v0 exit criteria ([KAS-36](https://linear.app/getkastor/issue/KAS-36)) are met.
   from `KASTOR_MCP_<SERVER>_URL`), http/runtime tools as `defineTool` files
   with Zod schemas. Both example modules build for it (KAS-32)
 
+### Fixed
+
+- `kastor build` no longer overwrites an implemented `runtime` tool stub. Such
+  a stub is generated once and then belongs to the user: the file is written
+  only while it still matches the stub the last build wrote, is kept rather
+  than deleted when its tool leaves the spec, and a spec change that lands
+  under an implementation arrives as a `<name>.kastor-new` sidecar beside it
+  plus a one-time warning naming both files (the build still succeeds, exit 0).
+  Ownership is recorded in the output
+  directory's `.kastorbuild` marker; a directory with no record is treated as
+  the user's. Both codegen targets (langgraph, eve) are covered (KAS-24)
+
 ### Changed
 
 - v0 platform provider selected: Claude Managed Agents. `target

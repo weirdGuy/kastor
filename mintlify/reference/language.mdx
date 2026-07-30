@@ -106,7 +106,7 @@ Source kinds:
 | --- | --- |
 | `mcp` | Parsed and supported by LangGraph codegen through generated MCP bindings. |
 | `http` | Parsed and supported by LangGraph codegen as a POST wrapper. |
-| `runtime` | Parsed and supported by LangGraph codegen as a stub for user code. |
+| `runtime` | Parsed and supported by LangGraph codegen as a stub for user code. The stub is generated once: after you edit it, later builds keep your file, and a spec change arrives as a `<name>.kastor-new` sidecar to reconcile. |
 | `builtin` | Parsed for platform targets; not valid for local LangGraph codegen. |
 | `script` | Parsed, but LangGraph execution glue is deferred. |
 
