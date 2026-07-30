@@ -1,7 +1,9 @@
 package claude
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -282,6 +284,52 @@ func TestDiffIsPureAndDeterministic(t *testing.T) {
 	}
 	if got := marshalObject(t, remote); got != remoteBefore {
 		t.Errorf("Diff mutated remote:\nbefore %s\nafter  %s", remoteBefore, got)
+	}
+}
+
+func TestDiffDeterministicAcrossLargeNestedObjects(t *testing.T) {
+	cfg := loadObject(t, "minimal_spec.json")
+	desiredMetadata := make(map[string]any)
+	remote := loadObject(t, "minimal_api_response.json")
+	remoteMetadata := remote["metadata"].(map[string]any)
+
+	for i := 0; i < 64; i++ {
+		key := fmt.Sprintf("key_%03d", i)
+		desiredMetadata[key] = map[string]any{
+			"array": []any{"desired", float64(i), map[string]any{"z": true, "a": "last"}},
+			"nested": map[string]any{
+				"zeta":  fmt.Sprintf("desired-%d", i),
+				"alpha": float64(i),
+			},
+		}
+		remoteMetadata[key] = map[string]any{
+			"array": []any{"remote", float64(i), map[string]any{"a": "first", "z": false}},
+			"nested": map[string]any{
+				"alpha": float64(i + 1),
+				"zeta":  fmt.Sprintf("remote-%d", i),
+			},
+		}
+	}
+	cfg["metadata"] = desiredMetadata
+	desired := &provider.Resource{Addr: "agent.minimal", Config: cfg}
+
+	var first []byte
+	for i := 0; i < 50; i++ {
+		diffs, err := New().Diff(desired, remote)
+		if err != nil {
+			t.Fatalf("Diff #%d: %v", i+1, err)
+		}
+		encoded, err := json.Marshal(diffs)
+		if err != nil {
+			t.Fatalf("marshal Diff #%d: %v", i+1, err)
+		}
+		if i == 0 {
+			first = encoded
+			continue
+		}
+		if !bytes.Equal(first, encoded) {
+			t.Fatalf("Diff is not byte-identical on run %d:\nfirst %s\n got  %s", i+1, first, encoded)
+		}
 	}
 }
 

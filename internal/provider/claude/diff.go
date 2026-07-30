@@ -42,15 +42,17 @@ func diffValue(path string, desired, remote any, out *[]provider.AttrDiff) {
 }
 
 func diffMap(path string, desired, remote map[string]any, out *[]provider.AttrDiff) {
-	keys := make(map[string]bool, len(desired)+len(remote))
+	seen := make(map[string]struct{})
+	var sorted []string
 	for key := range desired {
-		keys[key] = true
+		seen[key] = struct{}{}
+		sorted = append(sorted, key)
 	}
 	for key := range remote {
-		keys[key] = true
-	}
-	sorted := make([]string, 0, len(keys))
-	for key := range keys {
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
 		sorted = append(sorted, key)
 	}
 	sort.Strings(sorted)
