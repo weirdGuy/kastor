@@ -1,10 +1,14 @@
 package claude
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
 	"strings"
+
+	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/packages/param"
 
 	"github.com/weirdGuy/kastor/internal/provider"
 )
@@ -62,6 +66,115 @@ func normalizeForDiff(desired *provider.Resource, remote provider.Object) (provi
 	delete(spec["metadata"].(map[string]any), managedMarkerKey)
 	delete(echo["metadata"].(map[string]any), managedMarkerKey)
 	return spec, echo, nil
+}
+
+// normalizeCreateParams converts the comparison shape into the SDK request
+// shape. The SDK parameter override keeps serialization typed through the SDK
+// while preserving explicit nulls and empty arrays from the normalized object.
+func normalizeCreateParams(desired *provider.Resource) (anthropic.BetaAgentNewParams, error) {
+	request, err := normalizeAPIRequest(desired)
+	if err != nil {
+		return anthropic.BetaAgentNewParams{}, err
+	}
+	data, err := json.Marshal(request)
+	if err != nil {
+		return anthropic.BetaAgentNewParams{}, fmt.Errorf("%s: encode Claude Managed Agents create request: %w", desired.Addr, err)
+	}
+
+	var params anthropic.BetaAgentNewParams
+	param.SetJSON(data, &params)
+	return params, nil
+}
+
+// normalizeUpdateParams emits a full replacement for every Kastor-owned
+// field, plus the version fetched immediately before the update. Metadata is
+// the exception to full replacement in the API: null values are retained as
+// key-level deletion tombstones.
+func normalizeUpdateParams(desired *provider.Resource, version int64) (anthropic.BetaAgentUpdateParams, error) {
+	if version < 1 {
+		return anthropic.BetaAgentUpdateParams{}, fmt.Errorf("%s: remote version must be at least 1, got %d", desired.Addr, version)
+	}
+	request, err := normalizeAPIRequest(desired)
+	if err != nil {
+		return anthropic.BetaAgentUpdateParams{}, err
+	}
+	request["version"] = version
+
+	if rawMetadata, exists := desired.Config["metadata"]; exists && rawMetadata != nil {
+		metadata := rawMetadata.(map[string]any)
+		requestMetadata := request["metadata"].(map[string]any)
+		for key, value := range metadata {
+			if value == nil {
+				requestMetadata[key] = nil
+			}
+		}
+	}
+
+	data, err := json.Marshal(request)
+	if err != nil {
+		return anthropic.BetaAgentUpdateParams{}, fmt.Errorf("%s: encode Claude Managed Agents update request: %w", desired.Addr, err)
+	}
+	var params anthropic.BetaAgentUpdateParams
+	param.SetJSON(data, &params)
+	return params, nil
+}
+
+// normalizeAPIRequest removes comparison-only defaults from the normalized
+// spec. In particular, the MCP permission default must remain omitted from
+// requests so the platform applies its approval-required default.
+func normalizeAPIRequest(desired *provider.Resource) (provider.Object, error) {
+	spec, _, err := normalizeSpec(desired)
+	if err != nil {
+		return nil, err
+	}
+	request := cloneValue(spec).(provider.Object)
+	for _, value := range request["tools"].([]any) {
+		toolset := value.(map[string]any)
+		if toolset["type"] != mcpToolsetType {
+			continue
+		}
+		defaultConfig := toolset["default_config"].(map[string]any)
+		delete(defaultConfig, "permission_policy")
+	}
+	return request, nil
+}
+
+// normalizeAPIResponse decodes the SDK's unmodified response JSON into the
+// provider-neutral value model. Using RawJSON is required because archived_at
+// is nullable on the wire but represented as time.Time by the SDK.
+func normalizeAPIResponse(agent *anthropic.BetaManagedAgentsAgent) (provider.Object, error) {
+	if agent == nil {
+		return nil, fmt.Errorf("claude: API returned a nil agent")
+	}
+	raw := agent.RawJSON()
+	if raw == "" {
+		return nil, fmt.Errorf("claude: API returned an agent without response JSON")
+	}
+	var object provider.Object
+	if err := json.Unmarshal([]byte(raw), &object); err != nil {
+		return nil, fmt.Errorf("claude: decode Managed Agents response: %w", err)
+	}
+	return object, nil
+}
+
+func normalizedAPIID(remote provider.Object) (string, error) {
+	return requiredString(remote["id"], "remote.id")
+}
+
+func normalizedAPIVersion(remote provider.Object) (int64, error) {
+	raw, ok := remote["version"].(float64)
+	if !ok || raw < 1 || raw != float64(int64(raw)) {
+		return 0, fmt.Errorf("remote.version must be a positive integer, got %v", remote["version"])
+	}
+	return int64(raw), nil
+}
+
+func normalizedAPIArchived(remote provider.Object) (bool, error) {
+	value, exists := remote["archived_at"]
+	if !exists {
+		return false, fmt.Errorf("remote.archived_at is missing")
+	}
+	return value != nil, nil
 }
 
 // normalizeSpec maps the provider-neutral agent closure to the API shape
@@ -224,8 +337,9 @@ func normalizeSpecModel(addr string, raw any) (map[string]any, error) {
 
 // normalizeEchoModel accepts both API request forms. String models are
 // lifted to the response object form and omitted speed defaults to standard.
-// The current SDK's BetaManagedAgentsModelConfig and Params types expose only
-// id and speed; unknown response fields are not part of the compared object.
+// anthropic-sdk-go v1.61.0 also exposes an SDK-only Effort field that is not
+// documented by Agent Setup. Kastor intentionally compares only id and speed;
+// unknown response fields are not part of the compared object.
 func normalizeEchoModel(raw any) (map[string]any, error) {
 	switch model := raw.(type) {
 	case string:

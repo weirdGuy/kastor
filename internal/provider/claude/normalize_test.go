@@ -1,9 +1,7 @@
 package claude
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,7 +69,7 @@ func TestNormalizeModelStringAndDefaults(t *testing.T) {
 	}
 }
 
-func TestNormalizeSpecModelSupportsOnlySDKFields(t *testing.T) {
+func TestNormalizeSpecModelSupportsOnlyDocumentedFields(t *testing.T) {
 	cfg := loadObject(t, "minimal_spec.json")
 	cfg["model"].(map[string]any)["params"] = map[string]any{"speed": "fast"}
 	spec, _, err := normalizeSpec(&provider.Resource{Addr: "agent.minimal", Config: cfg})
@@ -206,24 +204,6 @@ func TestToolsetPermissionDefaults(t *testing.T) {
 	normalizedMCPDefault := normalized[1].(map[string]any)["default_config"].(map[string]any)
 	if got := normalizedMCPDefault["permission_policy"]; !cmp.Equal(got, map[string]any{"type": "always_ask"}) {
 		t.Errorf("normalized MCP permission policy = %#v, want always_ask", got)
-	}
-}
-
-func TestLifecycleOperationsAreExplicitStubs(t *testing.T) {
-	ctx := context.Background()
-	p := New()
-	resource := &provider.Resource{Addr: "agent.a", Config: provider.Object{}}
-
-	_, _, readErr := p.Read(ctx, "agent_1")
-	_, createErr := p.Create(ctx, resource)
-	updateErr := p.Update(ctx, "agent_1", resource)
-	deleteErr := p.Delete(ctx, "agent_1")
-	for name, err := range map[string]error{
-		"Read": readErr, "Create": createErr, "Update": updateErr, "Delete": deleteErr,
-	} {
-		if !errors.Is(err, ErrLifecycleNotImplemented) {
-			t.Errorf("%s error = %v, want ErrLifecycleNotImplemented", name, err)
-		}
 	}
 }
 
