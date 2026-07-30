@@ -1,0 +1,32 @@
+{
+  "description": "Answers engineering questions",
+  "model": {
+    "provider": "anthropic",
+    "id": "claude-opus-5"
+  },
+  "instructions": "Use the available tools and cite concrete evidence.",
+  "tools": [
+    {
+      "name": "read",
+      "source": {
+        "kind": "builtin"
+      }
+    },
+    {
+      "name": "github_get_issue",
+      "source": {
+        "kind": "mcp",
+        "uri": "mcp://github/get_issue"
+      }
+    },
+    {
+      "name": "write",
+      "source": {
+        "kind": "builtin"
+      }
+    }
+  ],
+  "metadata": {
+    "team": "platform"
+  }
+}

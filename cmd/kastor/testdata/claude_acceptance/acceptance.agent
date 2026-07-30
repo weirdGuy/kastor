@@ -1,0 +1,7 @@
+agent "kas_38_acceptance" {
+  description = "KAS-38 Claude Managed Agents acceptance test"
+
+  model         = model.acceptance
+  system_prompt = prompt.acceptance_system
+  tools         = [tool.read, tool.echo]
+}

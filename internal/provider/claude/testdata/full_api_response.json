@@ -1,0 +1,64 @@
+{
+  "id": "agent_01HqR2k7vXbZ9mNpL3wYcT8f",
+  "type": "agent",
+  "name": "weather",
+  "model": {
+    "id": "claude-opus-5",
+    "speed": "standard"
+  },
+  "system": "Use the available tools and cite concrete evidence.",
+  "description": "Answers engineering questions",
+  "tools": [
+    {
+      "type": "agent_toolset_20260401",
+      "default_config": {
+        "enabled": false,
+        "permission_policy": {
+          "type": "always_allow"
+        }
+      },
+      "configs": [
+        {
+          "name": "read",
+          "enabled": true
+        },
+        {
+          "name": "write",
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "type": "mcp_toolset",
+      "mcp_server_name": "github",
+      "default_config": {
+        "enabled": false,
+        "permission_policy": {
+          "type": "always_ask"
+        }
+      },
+      "configs": [
+        {
+          "name": "get_issue",
+          "enabled": true
+        }
+      ]
+    }
+  ],
+  "skills": [],
+  "mcp_servers": [
+    {
+      "type": "url",
+      "name": "github",
+      "url": "https://api.githubcopilot.com/mcp/"
+    }
+  ],
+  "metadata": {
+    "kastor_managed": "agent.weather",
+    "team": "platform"
+  },
+  "version": 7,
+  "created_at": "2026-04-03T18:24:10.412Z",
+  "updated_at": "2026-07-30T14:12:08.904Z",
+  "archived_at": null
+}
