@@ -229,7 +229,7 @@ export KASTOR_MCP_SEARCH_SERVER_URL="https://mcp.tavily.com/mcp/?tavilyApiKey=tv
 
 `ANTHROPIC_API_KEY` is the default credential. The `auth` block above only names it explicitly; you can point `api_key_env` at any other variable, or omit `auth` entirely.
 
-MCP endpoints are deployment configuration, never spec — the `mcp://` URI pins server and tool identity only. For each server a URI names, kastor reads `KASTOR_MCP_<SERVER>_URL`: the server name uppercased, with every character outside `A-Z0-9` replaced by `_`. So `mcp://search-server/tavily_search` needs `KASTOR_MCP_SEARCH_SERVER_URL`. A missing one fails the apply and names the variable it wanted.
+MCP endpoints are deployment configuration, never spec — the `mcp://` URI pins server and tool identity only. For each server a URI names, kastor reads `KASTOR_MCP_<SERVER>_URL`: the server name uppercased, with every character outside `A-Z0-9` replaced by `_`. So `mcp://search-server/tavily_search` needs `KASTOR_MCP_SEARCH_SERVER_URL`. A missing one fails the plan and names the variable it wanted.
 
 ### Plan and apply
 
