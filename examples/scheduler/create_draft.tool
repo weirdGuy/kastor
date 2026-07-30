@@ -19,7 +19,9 @@ tool "create_draft" {
   # Runtime kind: the official Typefully MCP server (typefully_create_draft)
   # requires a nested requestBody object, which v0's scalar-only param types
   # can't declare. The generated stub is hand-implemented against the
-  # Typefully v2 REST API instead — see create_draft_impl.py.
+  # Typefully v2 REST API instead, in place at
+  # gen/langgraph/tools/create_draft.py — kastor build writes that stub once
+  # and keeps your implementation on every build after.
   source {
     kind = "runtime"
   }
