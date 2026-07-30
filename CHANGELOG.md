@@ -10,6 +10,8 @@ v0 exit criteria ([KAS-36](https://linear.app/getkastor/issue/KAS-36)) are met.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-30
+
 ### Added
 
 - Claude Managed Agents platform provider: `target "claude_agents"` supports
@@ -21,6 +23,22 @@ v0 exit criteria ([KAS-36](https://linear.app/getkastor/issue/KAS-36)) are met.
   directories, MCP tools as allow-listed connection files (endpoint URLs
   from `KASTOR_MCP_<SERVER>_URL`), http/runtime tools as `defineTool` files
   with Zod schemas. Both example modules build for it (KAS-32)
+
+  Generated projects pin `eve@0.11.4` and the exact `ai` peer it requires;
+  the shapes emitted were validated against that release's own type
+  declarations. Models route through the Vercel AI Gateway, so the credential
+  is `AI_GATEWAY_API_KEY` (or project OIDC on Vercel) rather than a
+  per-vendor key, and `provider = "ollama"` is an error on this target — the
+  gateway cannot route a local runtime. Model `params` are not emitted:
+  eve 0.11.4 has no authored surface for sampling parameters, and the
+  generated `README.md` says so.
+- Generated LangGraph projects fail fast and lint clean (KAS-29): missing MCP
+  configuration is caught at startup by `mcp_support.ensure_config()` naming
+  what it looked for and where, instead of surfacing deep inside a run at
+  tool-call time; an unknown tool URI now lists the tools the server actually
+  advertises, so a typo is a one-glance fix; and every generated public
+  function carries a return-type annotation, so `ruff` and `pyright` report
+  the generated project clean
 
 ### Fixed
 
@@ -72,6 +90,20 @@ v0 exit criteria ([KAS-36](https://linear.app/getkastor/issue/KAS-36)) are met.
   counterpart in the remote object; and the fact that all of those are
   apply-time errors, since `kastor validate` is target-agnostic and `plan`
   calls no provider for a resource that is not yet in state
+
+  (KAS-55 later moved those errors from apply to plan; the docs were updated
+  to match in the same change.)
+- Language reference completed (KAS-30). The page already listed every block
+  type and field in SPEC.md §3; it now also carries the validation rules
+  behind them — unknown attributes and duplicate block names are errors, the
+  `source.uri` required/forbidden matrix, the absence of an `optional`
+  attribute on tool params, prompt frontmatter and body rules, and which
+  fields are errors on which target type. Each rule was verified against the
+  shipped binary
+- SPEC.md §3.1's provider table described only the LangGraph mapping and was
+  never updated when the eve target shipped. It is now the real per-target
+  support matrix with the credential per row, matching the language
+  reference (KAS-32)
 
 ## [0.1.2] - 2026-07-17
 
@@ -139,7 +171,8 @@ v0 exit criteria ([KAS-36](https://linear.app/getkastor/issue/KAS-36)) are met.
 - Release automation: GoReleaser + GitHub Actions on `v*` tags
 - Apache License 2.0
 
-[Unreleased]: https://github.com/weirdGuy/kastor/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/weirdGuy/kastor/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/weirdGuy/kastor/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/weirdGuy/kastor/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/weirdGuy/kastor/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/weirdGuy/kastor/compare/v0.0.1-alpha...v0.1.0
