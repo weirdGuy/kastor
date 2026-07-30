@@ -23,15 +23,14 @@ Working today:
 - scaffold a new module with `kastor init`
 - parse `.agent`, `.tool`, `.prompt`, and `kastor.hcl`
 - validate references and prompt variables
-- build runnable LangGraph projects
+- build runnable LangGraph and eve projects
 - run `kastor plan` / `kastor apply` / `kastor destroy` against the built-in in-memory platform
 - local state file, three-way diffs, and drift detection
-- examples: [weather agent](examples/weather), [content scheduler](examples/scheduler)
+- examples: [weather agent](examples/weather), [content scheduler](examples/scheduler), [support triage](examples/support-triage)
 
 Planned for v0:
 
-- a second codegen target: Vercel eve
-- hosted platform providers (in design — candidates: Bedrock AgentCore, Dify)
+- a hosted platform provider: Claude Managed Agents (selected, not yet implemented)
 
 Kastor is **not** an agent runtime.
 

@@ -31,7 +31,7 @@ Flags:
 
 | Flag | Meaning |
 | --- | --- |
-| `--target` | Codegen target to pre-configure. Implemented: `langgraph` (default). `eve` is a usage error until its generator ships. |
+| `--target` | Codegen target to pre-configure. Only `langgraph` (the default) has a scaffold; `eve` is a usage error here even though `kastor build` supports it. |
 | `--force` | Scaffold into a non-empty directory. Only the scaffold's own file names are overwritten; everything else is kept. |
 
 A directory that already contains visible files is refused with exit code `2`. Hidden entries such as `.git` never block scaffolding, so `kastor init` works in a freshly created git repository.
@@ -67,17 +67,12 @@ kastor build examples/weather
 kastor build --target langgraph examples/weather
 ```
 
-Implemented target:
+Implemented targets:
 
 | Target label | Status |
 | --- | --- |
 | `langgraph` | Implemented. Generates a Python LangGraph project. |
-
-Planned target:
-
-| Target label | Status |
-| --- | --- |
-| `eve` | Planned for v0. Vercel eve (TypeScript). Not registered in the current CLI. |
+| `eve` | Implemented. Generates a Vercel eve project (TypeScript). |
 
 There is no implemented `kastor compile` command. Use `kastor build`.
 
@@ -107,7 +102,7 @@ Planned provider:
 
 | Target label | Status |
 | --- | --- |
-| TBD (candidates: Bedrock AgentCore, Dify) | Planned for v0. Provider not selected; nothing registered in the current CLI. |
+| `claude_agents` | Planned for v0. Claude Managed Agents is the selected provider; nothing registered in the current CLI yet. |
 
 ## `kastor apply`
 

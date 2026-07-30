@@ -208,11 +208,10 @@ target "langgraph" {
 }
  
 # Managed platform target → `kastor plan` / `kastor apply`
-# Provider selection is tracked in the plan/apply milestone (§8); "dify" is illustrative.
-target "dify" {
+target "claude_agents" {
   type = "platform"
   auth {
-    api_key_env = "DIFY_API_KEY"
+    api_key_env = "ANTHROPIC_API_KEY"
   }
 }
 ```
@@ -222,7 +221,7 @@ target "dify" {
 - `codegen` targets require `output` and do not allow `auth`.
 - `platform` targets do not allow `output`; `auth` is optional (ambient credentials — env vars, instance roles — are the common case).
 - Fields that are meaningless for a target's type are errors, not ignored (configs rot through silent acceptance).
-- **A platform target's label selects its provider implementation**, exactly as a codegen target's label selects its generator: `target "dify"` binds to the Dify reconciler, `target "memory"` to the built-in in-memory platform. A label with no registered provider is an error naming the available providers. (A separate `provider` attribute is deliberately deferred until something forces it — e.g. two targets on the same platform kind in one module.)
+- **A platform target's label selects its provider implementation**, exactly as a codegen target's label selects its generator: `target "claude_agents"` binds to the Claude Managed Agents reconciler, `target "memory"` to the built-in in-memory platform. A label with no registered provider is an error naming the available providers. (A separate `provider` attribute is deliberately deferred until something forces it — e.g. two targets on the same platform kind in one module.)
 - The `memory` platform is built in: an **ephemeral in-memory store** so plan/apply can be demonstrated and exercised — examples, onboarding, CI — with no credentials and no network. `auth` on it is an error (meaningless fields, again). Its remote objects die with the process, so a later invocation's plan truthfully reports previously applied resources as remote-missing drift.
  
 ---
@@ -259,7 +258,7 @@ Exit codes (all commands): 0 clean, 1 validation/codegen/plan/apply errors, 2 us
   "version": 1,
   "serial": 4,
   "targets": {
-    "dify": {
+    "claude_agents": {
       "resources": {
         "agent.weather": {
           "id": "agent-abc123",
@@ -321,7 +320,7 @@ internal/
     crewai/         target: CrewAI (Python)
   provider/         platform reconcilers
     memory/         built-in in-memory platform (demos, examples, CI)
-    <tbd>/          TBD — candidates: agentcore/, dify/
+    claude/         provider: Claude Managed Agents
   state/            state file read/write, locking, diff
 ```
  
@@ -353,7 +352,7 @@ The plan/apply engine is target-agnostic and consumes exactly what `kastor valid
  
 1. Parser + `kastor validate` for `.agent`, `.tool`, `.prompt`, project file
 2. `kastor build` with **two** codegen targets: LangGraph and eve
-3. `kastor plan/apply` with **one** platform provider (TBD — candidates: Bedrock AgentCore, Dify)
+3. `kastor plan/apply` with **one** platform provider: Claude Managed Agents
 4. Examples repo: the weather agent end-to-end on both paths
 Two codegen targets + one provider prove the hybrid thesis. Everything else is expansion.
 

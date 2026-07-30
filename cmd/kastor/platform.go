@@ -16,8 +16,8 @@ import (
 // providerFactories maps a platform target's name to its provider factory:
 // the target label doubles as the provider selector, exactly like codegen
 // target names select generators (see cmd/kastor/build.go). The hosted
-// provider registers here once selected (TBD — candidates: Bedrock
-// AgentCore, Dify; SPEC.md §8).
+// provider — Claude Managed Agents, under the "claude_agents" label —
+// registers here once implemented (SPEC.md §8).
 var providerFactories = map[string]func(*schema.Target) (provider.Provider, error){
 	"memory": memory.Factory,
 }
