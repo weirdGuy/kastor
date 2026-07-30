@@ -84,17 +84,28 @@ func (p *Provider) Delete(_ context.Context, id string) error {
 
 // Diff implements provider.Provider via DiffObjects: the stored objects are
 // exactly the neutral configs that created them, so the generic structural
-// comparison is this platform's authoritative diff.
+// comparison is this platform's authoritative diff. Nothing in a spec is
+// unmappable onto a map in process memory, so the create path (nil remote)
+// never rejects a config here.
 func (p *Provider) Diff(desired *provider.Resource, remote provider.Object) ([]provider.AttrDiff, error) {
+	if desired == nil {
+		return nil, fmt.Errorf("memory: desired resource is nil")
+	}
 	return DiffObjects(desired.Config, remote), nil
 }
 
 // DiffObjects structurally compares two JSON value trees: maps diff by
 // sorted key union, same-length arrays element-wise, anything else as a
 // leaf. Old is the remote value, New the desired one. Output order is
-// deterministic (sorted key order). Exported so providertest's fake diffs
-// with the same algorithm and the two can never disagree.
+// deterministic (sorted key order). A nil remote means the object does not
+// exist yet and reads as an empty object, so every desired attribute comes
+// back as an addition rather than the whole tree as one leaf. Exported so
+// providertest's fake diffs with the same algorithm and the two can never
+// disagree.
 func DiffObjects(desired, remote provider.Object) []provider.AttrDiff {
+	if remote == nil {
+		remote = provider.Object{}
+	}
 	var diffs []provider.AttrDiff
 	diffValue("", desired, remote, &diffs)
 	return diffs

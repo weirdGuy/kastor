@@ -226,7 +226,7 @@ MCP endpoints stay out of the spec, exactly as they do for codegen: the `mcp://`
 URI pins server and tool identity only. For each server named in a URI, kastor
 reads `KASTOR_MCP_<SERVER>_URL` — the server name uppercased, with every
 character outside `A-Z0-9` replaced by `_`. So `mcp://search-server/tavily_search`
-needs `KASTOR_MCP_SEARCH_SERVER_URL`. A missing one fails the apply naming the
+needs `KASTOR_MCP_SEARCH_SERVER_URL`. A missing one fails the plan naming the
 variable it wanted.
 
 Plan, then apply:
@@ -269,7 +269,7 @@ them (SPEC.md §3.5). On this target:
 | `params { temperature = ... }`, `max_tokens`, anything but `speed` | Error. The platform's model object exposes `id` and `speed` only, so `speed` is the one param that maps; omitted, it is `standard`. |
 | `input` / `output` blocks | Sent nowhere. Managed Agents has no IO-contract field; the blocks stay valid spec and still drive references and validation, but they are not part of the remote object and never appear in a diff. |
 
-These are **apply-time** errors, not validation errors — see the caveat below.
+These are **plan-time** errors, not validation errors — see the caveat below.
 
 ### Destroying a Claude agent
 
@@ -285,34 +285,32 @@ after destroy proposes a create rather than an update.
 `destroy` does not prompt for confirmation in v0. On this target, run
 `kastor plan` first and read the `-` lines.
 
-### One caveat: these errors arrive at apply, not validate
+### One caveat: these errors arrive at plan, not validate
 
 `kastor validate` is target-agnostic — it parses, resolves references, and checks
 prompt variables, and it knows nothing about any provider. The table above is
 enforced by the provider, when it renders an agent for the platform.
 
-For a resource that already exists in state, that happens during `plan` (the
-provider's `Diff` is what compares it). For a resource kastor has not created
-yet, nothing calls the provider until `apply` — so `kastor plan` on a fresh
-module reports `+ agent.x (not in state)` and exits `0` even when the module can
-never apply:
+That rendering happens during `plan`, for every resource — including one kastor
+has not created yet, where there is no remote object to compare against. So a
+module that could never apply fails the plan, naming the resource and the target:
 
 ```console
+$ kastor validate
+Success! Module is valid: 1 agent, 1 tool, 1 prompt, 1 model, 1 target.
+
 $ kastor plan
-  + agent.probe (not in state)
+kastor: agent.probe: cannot be created on target.claude_agents: tool.rest: source kind "http" cannot be mapped to Claude Managed Agents; custom tools are client-executed and kastor is not a runtime; use an MCP-server wrapper with source kind "mcp"
 
-Plan for target.claude_agents: 1 to create, 0 to update, 0 to delete, 0 unchanged.
-
-$ kastor apply
-  + agent.probe (not in state)
-
-Plan for target.claude_agents: 1 to create, 0 to update, 0 to delete, 0 unchanged.
-kastor: agent.probe: create failed (0 of 1 changes applied, state saved): tool.rest: source kind "http" cannot be mapped to Claude Managed Agents; custom tools are client-executed and kastor is not a runtime; use an MCP-server wrapper with source kind "mcp"
+$ echo $?
+1
 ```
 
-Apply stops at the first failure and state records everything applied before it,
-so a re-run plans exactly the remainder — but on this target, treat a clean plan
-as "no remote changes pending", not as "this module is valid for the platform".
+A clean plan therefore does mean "this module maps onto this target". What it
+still cannot promise is that the platform will accept it — credentials, quotas,
+and model availability are only known to the API. When one of those fails, apply
+stops at the first failure and state records everything applied before it, so a
+re-run plans exactly the remainder.
 
 ## Quickstart: generate and run LangGraph
 

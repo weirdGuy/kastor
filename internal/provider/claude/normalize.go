@@ -48,10 +48,19 @@ type normalizationRules struct {
 
 // normalizeForDiff returns two independent comparison objects with all
 // provider-injected and provider-owned fields handled.
+//
+// A nil remote is the create path: the spec is still normalized in full —
+// that is what rejects a config Managed Agents cannot express — and compared
+// against an empty object, so every attribute reads as an addition. There is
+// no marker to assert, because Create is what stamps it.
 func normalizeForDiff(desired *provider.Resource, remote provider.Object) (provider.Object, provider.Object, error) {
 	spec, rules, err := normalizeDesired(desired)
 	if err != nil {
 		return nil, nil, err
+	}
+	if remote == nil {
+		delete(spec["metadata"].(map[string]any), managedMarkerKey)
+		return spec, provider.Object{}, nil
 	}
 	echo, err := normalizeAPIEcho(remote, rules)
 	if err != nil {

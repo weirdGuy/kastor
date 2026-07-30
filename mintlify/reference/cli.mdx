@@ -246,9 +246,9 @@ Implemented providers:
 | `claude_agents` | Implemented. Claude Managed Agents, the hosted provider. See [platform providers](#platform-providers). |
 | `memory` | Implemented. Ephemeral in-memory provider for local demos and tests. |
 
-<Warning>
-  A clean plan is not a validity check. For a resource kastor has not created yet there is no remote object to read and nothing calls the provider, so provider-level errors — an unsupported tool kind, an unsupported model param — do not appear until `kastor apply`.
-</Warning>
+<Note>
+  Planned creates are validated, not assumed. Even with no remote object to compare against, kastor asks the provider to render the agent for the target, so provider-level errors — an unsupported tool kind, an unsupported model param — fail the plan naming the resource, rather than surfacing half-way through an apply.
+</Note>
 
 ## `kastor apply`
 
@@ -321,7 +321,7 @@ The Managed Agents resource is narrower than the Kastor agent block, and fields 
 | `input` / `output` blocks | Not sent. Managed Agents has no IO-contract field. The blocks stay valid spec and still drive references and validation, but they are not part of the remote object and never appear in a diff. |
 
 <Warning>
-  Every row above is enforced by the provider, not by `kastor validate` — which is target-agnostic and knows nothing about any provider. For a resource already in state the check runs during `plan`; for one kastor has not created yet, nothing calls the provider until `apply`.
+  Every row above is enforced by the provider, not by `kastor validate` — which is target-agnostic and knows nothing about any provider. The check runs during `plan`, for resources already in state and for ones kastor has not created yet alike, and reads `agent.x: cannot be created on target.claude_agents: …`.
 </Warning>
 
 Failures are classified: authentication (`401`/`403`, naming the env var to check), not-found, out-of-band update conflict (`409`, telling you to re-run `kastor plan`), and transient (`429`/`5xx`), which is retried to a total of three attempts, honoring `Retry-After`. Apply stops at the first failure with everything applied up to that point already saved in state, so a re-run plans exactly the remainder.

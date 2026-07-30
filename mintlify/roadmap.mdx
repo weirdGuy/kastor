@@ -38,7 +38,7 @@ Kastor is early. The useful distinction is what works today, what belongs in v0,
 
 ## Known gaps
 
-- Provider constraints are not checked by `kastor validate`. It is target-agnostic, so a module that no platform provider can accept still validates. On `claude_agents`, an unsupported tool kind or model param surfaces at `apply` — or at `plan` only once the resource exists in state. See [platform providers](/reference/cli#platform-providers).
+- Provider constraints are not checked by `kastor validate`. It is target-agnostic, so a module that no platform provider can accept still validates; on `claude_agents`, an unsupported tool kind or model param is caught one step later, at `plan`. See [platform providers](/reference/cli#platform-providers).
 - The weather example runs on codegen and the `memory` platform, not on `claude_agents`: its model uses `provider = "openai"`, which the hosted provider rejects.
 - An agent's `input` and `output` blocks have no counterpart in the Claude Managed Agents resource, so they are not reconciled to that target.
 

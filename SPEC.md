@@ -296,6 +296,8 @@ Per resource, in the module's topological order (deletes first, in reverse depen
 | in spec and state, remote matches | no-op |
 | in state, not in spec | delete ("removed from spec") |
 
+**Creates are validated, not assumed:** for every planned create the engine calls the provider's `Diff` against an absent remote (§6), so a spec the target cannot express — an unsupported tool source kind, a foreign model provider — is a plan error naming the resource, not an apply-time surprise.
+
 **Drift** (remote changed outside kastor) is detected by diffing the *last-applied* config against the remote and reported as a warning naming the changed attributes; apply converges the remote back to the spec. When the user instead edits the spec to match a manual remote change, the plan is a no-op and apply silently refreshes the stale state entry (no remote call), so the warning does not recur.
 
 **Plan output.** One line per pending change, in execution order: `+` create, `~` update, `-` delete, with the reason in parentheses on creates and deletes, and one indented `path: old → new` line per attribute diff under updates (values render as compact JSON, truncated so a prompt body cannot flood the plan). An attribute diff is `{path, old, new}` with dotted paths (`model.id`, `tools[0].source.uri`); `old` is null when an attribute is being added, `new` null when it is being removed. Warnings precede the summary. The summary line is countable and per-target — `Plan for target.<name>: N to create, M to update, K to delete, J unchanged.` — or `No changes for target.<name>: remote matches the spec (N resources).` when nothing is pending. The whole plan (target, ordered changes, attribute diffs, diagnostics) is one serializable tree, so the `--json` rendering (§9) is a second renderer over the same data, not a second pipeline.
@@ -333,6 +335,7 @@ Providers implement a common interface (`Read/Create/Update/Delete/Diff`) — la
 - `Create(resource)` returns the platform's id; the engine records it in state immediately.
 - `Delete(id)` is idempotent: deleting an already-missing remote object succeeds, so re-runs after partial failures converge.
 - `Diff(desired, remote)` is the comparison authority — only the provider knows how the neutral config maps onto its platform's attributes. Empty result = in sync. The engine also diffs the last-applied config against the remote for drift detection.
+- `Diff` must accept a **nil remote**, meaning the object does not exist on the platform. It then validates the desired config exactly as it would against an existing object — returning an error is how a provider rejects a spec it cannot map — and otherwise returns one attribute diff per attribute a `Create` would set. The engine calls `Diff` this way for every planned create, so a module that cannot apply fails at plan.
 - `Diff` must be pure and deterministic; `Read` must not mutate. `kastor plan` issues only these two.
 
 The plan/apply engine is target-agnostic and consumes exactly what `kastor validate` assembles (loaded module, dependency graph, topological order) plus the state file — the same shape as the codegen engine's `Generate(job)` contract.

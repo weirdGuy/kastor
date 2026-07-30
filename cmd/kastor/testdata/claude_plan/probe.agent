@@ -1,0 +1,7 @@
+agent "probe" {
+  description = "Plan-time provider validation fixture (KAS-41)"
+
+  model         = model.haiku
+  system_prompt = prompt.probe_system
+  tools         = [tool.read]
+}

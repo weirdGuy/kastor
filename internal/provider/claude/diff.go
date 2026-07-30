@@ -66,8 +66,18 @@ func diffMap(path string, desired, remote map[string]any, out *[]provider.AttrDi
 		}
 		switch {
 		case !inRemote:
+			// An absent key and an explicit null are the same state, so a
+			// null desired value is not an addition. This is what keeps the
+			// create path (remote is the empty object) from reporting every
+			// unset optional field as an attribute it will set.
+			if want == nil {
+				continue
+			}
 			*out = append(*out, provider.AttrDiff{Path: subpath, Old: nil, New: want})
 		case !inDesired:
+			if got == nil {
+				continue
+			}
 			*out = append(*out, provider.AttrDiff{Path: subpath, Old: got, New: nil})
 		default:
 			diffValue(subpath, want, got, out)

@@ -24,6 +24,16 @@ v0 exit criteria ([KAS-36](https://linear.app/getkastor/issue/KAS-36)) are met.
 
 ### Fixed
 
+- `kastor plan` no longer green-lights a module the target cannot apply. A
+  resource absent from state never reached the provider, so a spec with an
+  unsupported tool source kind, a non-anthropic model provider, an unsupported
+  model param, or a missing `KASTOR_MCP_<SERVER>_URL` planned clean as
+  `+ agent.x (not in state)` and exited 0, then failed part-way through apply.
+  Planned creates are now validated through the provider's `Diff` against an
+  absent remote and fail the plan naming the resource and the target. The
+  provider contract states what `Diff` must do when the remote object does not
+  exist; `kastor validate` itself stays provider-agnostic (KAS-55)
+
 - `kastor build` no longer overwrites an implemented `runtime` tool stub. Such
   a stub is generated once and then belongs to the user: the file is written
   only while it still matches the stub the last build wrote, is kept rather

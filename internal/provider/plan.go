@@ -30,7 +30,7 @@ type Change struct {
 	Action Action     `json:"action"`
 	ID     string     `json:"id,omitempty"`     // remote id; empty for creates
 	Reason string     `json:"reason,omitempty"` // why this action was chosen
-	Diffs  []AttrDiff `json:"diffs,omitempty"`  // desired vs. remote (updates)
+	Diffs  []AttrDiff `json:"diffs,omitempty"`  // attributes the change sets: desired vs. remote (updates), desired vs. nothing (creates)
 	Drift  []AttrDiff `json:"drift,omitempty"`  // last-applied vs. remote (informational)
 }
 
@@ -97,6 +97,11 @@ type Job struct {
 // is gone → create (with a drift warning); otherwise the provider's Diff
 // against the desired config decides update vs. noop, and its Diff against
 // the last-applied config detects drift (remote changed outside kastor).
+//
+// Creates are not taken on trust: the provider's Diff is called against an
+// absent (nil) remote, so a spec the target cannot express — an unsupported
+// tool source kind, a foreign model provider — fails here instead of
+// half-way through apply.
 func BuildPlan(ctx context.Context, p Provider, job *Job) (*Plan, error) {
 	plan := &Plan{Target: job.Target.Name}
 	resources := stateResources(job)
@@ -115,7 +120,11 @@ func BuildPlan(ctx context.Context, p Provider, job *Job) (*Plan, error) {
 
 		st, tracked := resources[addr]
 		if !tracked {
-			plan.Changes = append(plan.Changes, Change{Addr: addr, Action: ActionCreate, Reason: "not in state"})
+			change, err := planCreate(p, job, desired, "not in state")
+			if err != nil {
+				return nil, err
+			}
+			plan.Changes = append(plan.Changes, change)
 			continue
 		}
 
@@ -124,11 +133,11 @@ func BuildPlan(ctx context.Context, p Provider, job *Job) (*Plan, error) {
 			return nil, fmt.Errorf("%s: reading remote object %s: %w", addr, st.ID, err)
 		}
 		if !found {
-			plan.Changes = append(plan.Changes, Change{
-				Addr:   addr,
-				Action: ActionCreate,
-				Reason: fmt.Sprintf("remote object %s missing", st.ID),
-			})
+			change, err := planCreate(p, job, desired, fmt.Sprintf("remote object %s missing", st.ID))
+			if err != nil {
+				return nil, err
+			}
+			plan.Changes = append(plan.Changes, change)
 			plan.Diagnostics = append(plan.Diagnostics, Diagnostic{
 				Severity: SeverityWarning,
 				Addr:     addr,
@@ -226,6 +235,20 @@ func desiredResource(job *Job, addr string) (*Resource, error) {
 		return nil, err
 	}
 	return &Resource{Addr: addr, Config: cfg}, nil
+}
+
+// planCreate builds the create change for a resource with no remote object,
+// asking the provider to render the desired config against an absent remote
+// first (Provider.Diff's create-path contract). A provider that cannot map
+// the spec onto its platform reports it here, which is the whole point: plan
+// must not green-light a module that apply would reject. On success the
+// returned diffs are the attributes the create will set.
+func planCreate(p Provider, job *Job, desired *Resource, reason string) (Change, error) {
+	diffs, err := p.Diff(desired, nil)
+	if err != nil {
+		return Change{}, fmt.Errorf("%s: cannot be created on target.%s: %w", desired.Addr, job.Target.Name, err)
+	}
+	return Change{Addr: desired.Addr, Action: ActionCreate, Reason: reason, Diffs: diffs}, nil
 }
 
 // removedFromSpec plans deletes for resources tracked in state whose block

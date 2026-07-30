@@ -253,6 +253,82 @@ func TestMappingValidationErrors(t *testing.T) {
 	}
 }
 
+// TestDiffCreatePathValidatesTheSpec is the KAS-55 contract: a nil remote is
+// how the engine asks "could this be created?", so every mapping error must
+// surface there instead of waiting for apply.
+func TestDiffCreatePathValidatesTheSpec(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(provider.Object)
+		wantErr []string
+	}{
+		{
+			name: "non-anthropic model provider",
+			mutate: func(cfg provider.Object) {
+				cfg["model"].(map[string]any)["provider"] = "openai"
+			},
+			wantErr: []string{"agent.weather", "model.provider", "openai", "anthropic"},
+		},
+		{
+			name: "unsupported model param",
+			mutate: func(cfg provider.Object) {
+				cfg["model"].(map[string]any)["params"] = map[string]any{"temperature": 0.2}
+			},
+			wantErr: []string{"agent.weather", "model.params.temperature", "unsupported", "speed"},
+		},
+		{
+			name:    "http tool source",
+			mutate:  replaceToolsWithKind("weather_http", "http"),
+			wantErr: []string{"tool.weather_http", `source kind "http"`, "MCP-server wrapper"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setFullMCPEnv(t)
+			cfg := loadObject(t, "full_spec.json")
+			tt.mutate(cfg)
+
+			_, err := New().Diff(&provider.Resource{Addr: "agent.weather", Config: cfg}, nil)
+			if err == nil {
+				t.Fatal("Diff against an absent remote succeeded, want validation error")
+			}
+			for _, text := range tt.wantErr {
+				if !strings.Contains(err.Error(), text) {
+					t.Errorf("error %q does not contain %q", err, text)
+				}
+			}
+		})
+	}
+}
+
+func TestDiffCreatePathReturnsTheAttributesCreateWillSet(t *testing.T) {
+	diffs, err := New().Diff(fullResource(t), nil)
+	if err != nil {
+		t.Fatalf("Diff against an absent remote: %v", err)
+	}
+
+	paths := map[string]bool{}
+	for _, d := range diffs {
+		if d.Old != nil {
+			t.Errorf("%s: Old = %v, want nil — nothing exists remotely yet", d.Path, d.Old)
+		}
+		if d.New == nil {
+			t.Errorf("%s: unset attribute reported as an addition", d.Path)
+		}
+		paths[d.Path] = true
+	}
+	for _, want := range []string{"name", "model", "system", "description", "tools", "mcp_servers"} {
+		if !paths[want] {
+			t.Errorf("create diffs do not set %s: %+v", want, diffs)
+		}
+	}
+	// The ownership marker is stamped by Create, not user configuration.
+	if paths["metadata."+managedMarkerKey] {
+		t.Errorf("create diffs expose the %s marker: %+v", managedMarkerKey, diffs)
+	}
+}
+
 func TestDiffRequiresMCPServerURLAtPlanTime(t *testing.T) {
 	t.Setenv("KASTOR_MCP_GITHUB_URL", "")
 	_, err := New().Diff(

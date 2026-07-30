@@ -22,12 +22,16 @@ func countingSave(n *int) func() error {
 	}
 }
 
+// buildPlan plans against the fake and resets its call log, so the call
+// assertions in this file cover the apply under test and not the read/diff
+// calls the planning phase made first.
 func buildPlan(t *testing.T, fake *providertest.Fake, job *provider.Job) *provider.Plan {
 	t.Helper()
 	plan, err := provider.BuildPlan(context.Background(), fake, job)
 	if err != nil {
 		t.Fatalf("BuildPlan: %v", err)
 	}
+	fake.Calls = nil
 	return plan
 }
 
