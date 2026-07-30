@@ -48,6 +48,13 @@ type AttrDiff struct {
 //     means "in sync". The engine calls it with the spec's desired config
 //     (update-or-noop decision) and with the last-applied config from state
 //     (drift detection).
+//   - Diff must accept a nil remote, which means the object does not exist
+//     on the platform. It must then validate the desired config exactly as
+//     it would against an existing object — returning an error is how a
+//     provider rejects a spec it cannot map onto its platform — and on
+//     success return one AttrDiff per attribute a Create would set (Old nil).
+//     The engine calls Diff this way for every resource it plans to create,
+//     so a module that cannot apply fails at plan rather than at apply.
 //   - Diff must be pure and deterministic; Read must not mutate anything.
 //     kastor plan issues only Read and Diff calls.
 type Provider interface {

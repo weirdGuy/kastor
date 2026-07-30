@@ -107,8 +107,72 @@ func TestBuildPlanFreshModuleCreatesInTopoOrder(t *testing.T) {
 	if len(plan.Diagnostics) != 0 {
 		t.Errorf("unexpected diagnostics: %+v", plan.Diagnostics)
 	}
-	if len(fake.Calls) != 0 {
-		t.Errorf("plan against empty state made provider calls: %v", fake.Calls)
+
+	// Every create is validated through the provider, and the diffs it
+	// returns are the attributes the create will set.
+	wantCalls := []string{"diff agent.geocoder", "diff agent.forecast", "diff agent.weather"}
+	if diff := cmp.Diff(wantCalls, fake.Calls); diff != "" {
+		t.Errorf("provider calls (-want +got):\n%s", diff)
+	}
+	for _, c := range plan.Changes {
+		if len(c.Diffs) == 0 {
+			t.Errorf("%s: create carries no attribute diffs", c.Addr)
+		}
+		for _, d := range c.Diffs {
+			if d.Old != nil {
+				t.Errorf("%s: create diff %s has Old = %v, want nil", c.Addr, d.Path, d.Old)
+			}
+		}
+	}
+}
+
+// TestBuildPlanCreateRejectedByProviderFails is the KAS-55 regression: a
+// module the target cannot express must fail at plan, not at apply.
+func TestBuildPlanCreateRejectedByProviderFails(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(*provider.Job, *providertest.Fake)
+	}{
+		{
+			name:  "absent from state",
+			setup: func(*provider.Job, *providertest.Fake) {},
+		},
+		{
+			name: "tracked but remote object is gone",
+			setup: func(job *provider.Job, fake *providertest.Fake) {
+				ids := seedAll(t, job, fake)
+				delete(fake.Objects, ids["agent.forecast"])
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			job := newJob(t)
+			fake := providertest.New()
+			tt.setup(job, fake)
+			unmappable := errors.New(`tool.rest: source kind "http" cannot be mapped to this platform`)
+			fake.FailOn = map[string]error{"diff agent.forecast": unmappable}
+
+			_, err := provider.BuildPlan(context.Background(), fake, job)
+			if err == nil {
+				t.Fatal("BuildPlan succeeded, want error")
+			}
+			if !errors.Is(err, unmappable) {
+				t.Errorf("error %v does not wrap the provider error", err)
+			}
+			for _, want := range []string{"agent.forecast", "target.fake"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q missing %q", err, want)
+				}
+			}
+			// No mutating call may precede the failure.
+			for _, call := range fake.Calls {
+				if !strings.HasPrefix(call, "read ") && !strings.HasPrefix(call, "diff ") {
+					t.Errorf("plan issued mutating call %q", call)
+				}
+			}
+		})
 	}
 }
 

@@ -185,6 +185,131 @@ func TestPlanWeatherExample(t *testing.T) {
 	}
 }
 
+// TestPlanRejectsUnappliableClaudeModule is the KAS-55 regression: a module
+// the Claude Managed Agents target cannot express must fail at plan, not at
+// apply. Nothing reaches the network — the agent is absent from state, so
+// plan only renders the spec through the provider.
+func TestPlanRejectsUnappliableClaudeModule(t *testing.T) {
+	tests := []struct {
+		name    string
+		file    string
+		body    string
+		wantOut []string
+	}{
+		{
+			name: "unsupported tool source kind",
+			file: "probe.tool",
+			body: `tool "read" {
+  description = "Read a record over HTTP"
+
+  returns {
+    type = string
+  }
+
+  source {
+    kind = "http"
+    uri  = "https://api.example.com/records"
+  }
+}
+`,
+			wantOut: []string{"agent.probe", "tool.read", `source kind "http"`, "MCP-server wrapper"},
+		},
+		{
+			name: "non-anthropic model provider",
+			file: "kastor.hcl",
+			body: `model "haiku" {
+  provider = "openai"
+  id       = "gpt-4o-mini"
+}
+
+target "claude_agents" {
+  type = "platform"
+
+  auth {
+    api_key_env = "ANTHROPIC_API_KEY"
+  }
+}
+`,
+			wantOut: []string{"agent.probe", "model.provider", "openai", "anthropic"},
+		},
+		{
+			name: "unsupported model param",
+			file: "kastor.hcl",
+			body: `model "haiku" {
+  provider = "anthropic"
+  id       = "claude-haiku-4-5"
+
+  params {
+    temperature = 0.2
+  }
+}
+
+target "claude_agents" {
+  type = "platform"
+
+  auth {
+    api_key_env = "ANTHROPIC_API_KEY"
+  }
+}
+`,
+			wantOut: []string{"agent.probe", "model.params.temperature", "unsupported", "speed"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("ANTHROPIC_API_KEY", "plan-does-not-call-the-api")
+			dir := copyModule(t, "testdata/claude_plan")
+			if err := os.WriteFile(filepath.Join(dir, tt.file), []byte(tt.body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			// The module itself is well-formed: kastor validate is
+			// provider-agnostic and must still pass.
+			if out, err := runCLI(t, "validate", dir); err != nil {
+				t.Fatalf("validate rejected a well-formed module: %v\n%s", err, out)
+			}
+
+			out, err := runCLI(t, "plan", dir)
+			if err == nil {
+				t.Fatalf("plan succeeded on a module that cannot apply\noutput:\n%s", out)
+			}
+			if code := exitCode(err); code != 1 {
+				t.Errorf("exit code = %d, want 1 (error: %v)", code, err)
+			}
+			for _, want := range append(tt.wantOut, "target.claude_agents") {
+				if !strings.Contains(out, want) {
+					t.Errorf("output missing %q:\n%s", want, out)
+				}
+			}
+			if _, err := os.Stat(filepath.Join(dir, state.Filename)); !os.IsNotExist(err) {
+				t.Error("a failed plan wrote a state file")
+			}
+		})
+	}
+}
+
+// TestPlanValidClaudeModuleStillPlansACreate is the happy-path counterpart:
+// plan-time provider validation must not reject a module the target can
+// express.
+func TestPlanValidClaudeModuleStillPlansACreate(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "plan-does-not-call-the-api")
+	dir := copyModule(t, "testdata/claude_plan")
+
+	out, err := runCLI(t, "plan", dir)
+	if err != nil {
+		t.Fatalf("plan: %v\n%s", err, out)
+	}
+	for _, want := range []string{
+		"+ agent.probe (not in state)",
+		"Plan for target.claude_agents: 1 to create, 0 to update, 0 to delete, 0 unchanged.",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("plan output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestPlatformCommandErrors(t *testing.T) {
 	tests := []struct {
 		name     string
