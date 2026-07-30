@@ -26,7 +26,7 @@ Working today:
 - build runnable LangGraph and eve projects
 - run `kastor plan` / `kastor apply` / `kastor destroy` against the built-in in-memory platform
 - local state file, three-way diffs, and drift detection
-- examples: [weather agent](examples/weather), [content scheduler](examples/scheduler)
+- examples: [weather agent](examples/weather), [content scheduler](examples/scheduler), [support triage](examples/support-triage)
 
 Planned for v0:
 

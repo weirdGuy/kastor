@@ -17,7 +17,7 @@ weather_system.prompt
 forecast_system.prompt
 ```
 
-The module declares three agents, one tool, two prompts, one model, one LangGraph codegen target, and one in-memory platform target.
+The module declares three agents, one tool, two prompts, one model, two codegen targets (LangGraph and eve), and one in-memory platform target.
 
 ## Project file
 
@@ -39,12 +39,17 @@ target "langgraph" {
   output = "./gen/langgraph"
 }
 
+target "eve" {
+  type   = "codegen"
+  output = "./gen/eve"
+}
+
 target "memory" {
   type = "platform"
 }
 ```
 
-`target "langgraph"` is for `kastor build`. `target "memory"` is for `kastor plan` and `kastor apply`.
+`target "langgraph"` and `target "eve"` are for `kastor build`. `target "memory"` is for `kastor plan` and `kastor apply`.
 
 ## Weather agent
 
