@@ -41,7 +41,7 @@ That shape makes agent changes easier to review in pull requests and easier to r
 Kastor has two paths:
 
 - `kastor build` compiles a module into runnable framework code. LangGraph and Vercel eve are both implemented codegen targets.
-- `kastor plan` and `kastor apply` reconcile platform targets using state, diffs, and dependency ordering. The built-in `memory` provider works today for local demos and tests. Claude Managed Agents is the selected hosted provider for v0, not yet implemented.
+- `kastor plan` and `kastor apply` reconcile platform targets using state, diffs, and dependency ordering. Two providers are implemented: `claude_agents` (Claude Managed Agents, the hosted path) and the built-in `memory` provider for credential-free demos and tests.
 
 The mental model is similar to Terraform, but Kastor starts one layer earlier: the agent definition itself.
 
@@ -55,14 +55,15 @@ Implemented or prototyped today:
 - `kastor validate`
 - `kastor build` for LangGraph and eve
 - `kastor plan`, `kastor apply`, and `kastor destroy` for the built-in in-memory platform
+- `kastor plan`, `kastor apply`, and `kastor destroy` for hosted Claude Managed Agents (`target "claude_agents"`)
 - local `kastor.state.json` state for platform targets
 - canonical formatting with `kastor fmt`
 - weather, scheduler, and support-triage examples
 
 Planned for v0:
 
-- one hosted platform provider: Claude Managed Agents
 - a complete end-to-end weather-agent path across codegen and platform reconciliation
+- structured `--json` rendering for diagnostics and plans
 - tighter first-run packaging and docs
 
 ## What Kastor is not

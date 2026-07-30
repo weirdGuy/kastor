@@ -17,6 +17,7 @@ Kastor is early. The useful distinction is what works today, what belongs in v0,
 - `kastor build` for LangGraph and eve
 - `kastor plan`, `kastor apply`, and `kastor destroy`
 - Built-in `memory` platform provider
+- Claude Managed Agents platform provider (`target "claude_agents"`)
 - Local `kastor.state.json`
 - `kastor fmt`
 - `kastor version`
@@ -32,9 +33,14 @@ Kastor is early. The useful distinction is what works today, what belongs in v0,
 
 ## Planned but not implemented in the current CLI
 
-- Hosted platform provider registration (Claude Managed Agents)
 - A scaffold for `kastor init --target eve`
 - Structured `--json` rendering for diagnostics and plans
+
+## Known gaps
+
+- Provider constraints are not checked by `kastor validate`. It is target-agnostic, so a module that no platform provider can accept still validates. On `claude_agents`, an unsupported tool kind or model param surfaces at `apply` — or at `plan` only once the resource exists in state. See [platform providers](/reference/cli#platform-providers).
+- The weather example runs on codegen and the `memory` platform, not on `claude_agents`: its model uses `provider = "openai"`, which the hosted provider rejects.
+- An agent's `input` and `output` blocks have no counterpart in the Claude Managed Agents resource, so they are not reconciled to that target.
 
 ## Deferred v1 ideas
 

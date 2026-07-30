@@ -1,9 +1,9 @@
 ---
 title: "Quickstart"
-description: "Install kastor and run the weather example."
+description: "Install kastor, run the weather example, and reconcile a hosted Claude agent."
 ---
 
-This quickstart scaffolds a module, validates the weather example, generates LangGraph code, and shows the platform lifecycle using the built-in in-memory provider.
+This quickstart scaffolds a module, validates the weather example, generates LangGraph code, shows the platform lifecycle on the built-in in-memory provider, and then reconciles a real hosted agent with Claude Managed Agents.
 
 ## Prerequisites
 
@@ -12,6 +12,7 @@ This quickstart scaffolds a module, validates the weather example, generates Lan
 - An OpenAI API key if you want the generated weather agent to call the configured `openai` model
 - A Tavily API key if you want to run the example MCP web-search tool against Tavily
 - [`uvx`](https://docs.astral.sh/uv/) if you want to run the MCP fetch tool in the `kastor init` scaffold
+- An Anthropic API key with Managed Agents access if you want to run the hosted `claude_agents` path at the end
 
 Check the install:
 
@@ -114,7 +115,7 @@ target "memory" {
 }
 ```
 
-`memory` is implemented today. It is an in-process provider for demos, tests, and onboarding. It does not create hosted resources and does not require credentials.
+`memory` is an in-process provider for demos, tests, and onboarding. It does not create hosted resources and does not require credentials. The hosted provider is `claude_agents`, covered [below](#reconcile-a-hosted-claude-agent).
 
 ```bash
 kastor plan examples/weather
@@ -140,6 +141,124 @@ Kastor writes `kastor.state.json` in the module root. Like Terraform state, it i
 
 Because the `memory` platform is ephemeral, a later CLI invocation cannot read the previous in-memory objects. A future `plan` may report remote-missing drift and recreate them. That is expected for this provider.
 
+## Reconcile a hosted Claude agent
+
+`target "claude_agents"` reconciles agents in your Anthropic organization through Claude Managed Agents. Unlike `memory`, this creates real remote objects.
+
+<Warning>
+  `kastor destroy` **archives** a Claude agent, and archive is irreversible. The agent cannot be restored and stays listed in the Anthropic Console permanently. `destroy` does not prompt for confirmation in v0 — run `kastor plan` first and read the `-` lines.
+</Warning>
+
+### Write the module
+
+Four files in an empty directory.
+
+```hcl kastor.hcl
+model "haiku" {
+  provider = "anthropic"
+  id       = "claude-haiku-4-5"
+}
+
+target "claude_agents" {
+  type = "platform"
+
+  auth {
+    api_key_env = "ANTHROPIC_API_KEY"
+  }
+}
+```
+
+```hcl researcher.agent
+agent "researcher" {
+  description = "Answers research questions with web search and a hosted MCP server"
+
+  model         = model.haiku
+  system_prompt = prompt.researcher_system
+
+  tools = [tool.web_search, tool.tavily_search]
+}
+```
+
+```hcl research.tool
+tool "web_search" {
+  description = "Claude's hosted web search"
+
+  returns {
+    type = string
+  }
+
+  source {
+    kind = "builtin"
+  }
+}
+
+tool "tavily_search" {
+  description = "Search the web through Tavily's hosted MCP server"
+
+  param "query" {
+    type = string
+  }
+
+  returns {
+    type = string
+  }
+
+  source {
+    kind = "mcp"
+    uri  = "mcp://search-server/tavily_search"
+  }
+}
+```
+
+```text researcher_system.prompt
+---
+name     = "researcher_system"
+requires = []
+---
+You are a research assistant. Answer concisely and cite your sources.
+```
+
+The model must use `provider = "anthropic"`. `tool.web_search` is `kind = "builtin"` because Claude hosts it; `tool.tavily_search` is `kind = "mcp"` because it lives on an MCP server.
+
+### Set the environment
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-YOUR-KEY
+export KASTOR_MCP_SEARCH_SERVER_URL="https://mcp.tavily.com/mcp/?tavilyApiKey=tvly-YOUR-KEY"
+```
+
+`ANTHROPIC_API_KEY` is the default credential. The `auth` block above only names it explicitly; you can point `api_key_env` at any other variable, or omit `auth` entirely.
+
+MCP endpoints are deployment configuration, never spec — the `mcp://` URI pins server and tool identity only. For each server a URI names, kastor reads `KASTOR_MCP_<SERVER>_URL`: the server name uppercased, with every character outside `A-Z0-9` replaced by `_`. So `mcp://search-server/tavily_search` needs `KASTOR_MCP_SEARCH_SERVER_URL`. A missing one fails the apply and names the variable it wanted.
+
+### Plan and apply
+
+```bash
+kastor plan
+kastor apply
+```
+
+```console
+$ kastor apply
+  + agent.researcher (not in state)
+
+Plan for target.claude_agents: 1 to create, 0 to update, 0 to delete, 0 unchanged.
+
+Applied target.claude_agents: 1 created, 0 updated, 0 deleted.
+```
+
+Kastor records the remote id in `kastor.state.json` and stamps `metadata.kastor_managed = "agent.researcher"` on the remote agent. That marker is an ownership assertion: kastor refuses to compare — and therefore to update — a remote agent that does not carry it, so an agent created by hand in the Console cannot be silently overwritten.
+
+Edit the spec and re-apply, and the change lands as an attribute-level update. Change the agent in the Console instead, and the next `plan` reports drift and plans the update that converges it back.
+
+### Know the constraints before you apply
+
+The Managed Agents resource is narrower than the Kastor agent block, and Kastor treats fields that are meaningless for a target as errors rather than ignoring them. Tool kinds `http`, `script`, and `runtime` are rejected, model `params` other than `speed` are rejected, and `input` / `output` blocks are not part of the remote object at all. See [platform providers](/reference/cli#platform-providers) for the full table.
+
+<Warning>
+  These are apply-time errors. `kastor validate` is target-agnostic, and `kastor plan` on a module it has not created yet calls no provider — so a plan can be clean and exit `0` for a module that can never apply. Read a clean plan as "no remote changes pending", not "valid for this platform".
+</Warning>
+
 ## Intended v0 workflow
 
 The intended workflow is:
@@ -155,12 +274,12 @@ Implemented today:
 
 - `validate`
 - `build` for LangGraph and eve
-- `plan` / `apply` / `destroy` for `target "memory"`
+- `plan` / `apply` / `destroy` for `target "memory"` and `target "claude_agents"`
 
 Planned for v0:
 
-- a hosted platform provider: Claude Managed Agents
 - a fully documented end-to-end hosted weather-agent example
+- structured `--json` rendering for diagnostics and plans
 
 <Warning>
   There is no implemented `kastor compile` command. The current compiler command is `kastor build`.
