@@ -120,6 +120,42 @@ func TestGenerateMinimalModule(t *testing.T) {
 	}
 }
 
+// TestGenerateRuntimeToolIsPreserved pins the ownership half of the runtime
+// stub contract: the stub file — and only the stub file — is generated in
+// preserve mode, and its TODO tells the user what that means, naming the
+// sidecar path build.Write would actually use.
+func TestGenerateRuntimeToolIsPreserved(t *testing.T) {
+	job := loadJob(t, filepath.Join("testdata", "runtime_tool"), "dev")
+	files := buildtest.AssertDeterministic(t, langgraph.Generator{}, job)
+
+	var preserved []string
+	stub := ""
+	for _, f := range files {
+		if f.Preserve {
+			preserved = append(preserved, f.Path)
+		}
+		if f.Path == "tools/lookup.py" {
+			stub = string(f.Data)
+		}
+	}
+	if diff := cmp.Diff([]string{"tools/lookup.py"}, preserved); diff != "" {
+		t.Errorf("preserve-mode files (-want +got):\n%s", diff)
+	}
+
+	for _, want := range []string{
+		"leaves the file alone",
+		"lookup.py" + build.SidecarSuffix,
+		"NotImplementedError",
+	} {
+		if !strings.Contains(stub, want) {
+			t.Errorf("generated stub does not mention %q:\n%s", want, stub)
+		}
+	}
+	if strings.Contains(stub, "regenerates") {
+		t.Errorf("generated stub still advertises being regenerated:\n%s", stub)
+	}
+}
+
 // TestGenerateErrors covers the specs the langgraph target must reject:
 // each fixture is a valid Kastor module that has no langgraph mapping.
 func TestGenerateErrors(t *testing.T) {

@@ -26,9 +26,17 @@ import (
 // output directory, and must not contain hidden (dot-prefixed) segments —
 // hidden entries in the output directory belong to the user, never to the
 // engine (see Write).
+//
+// Preserve marks a file the engine generates once and then hands over: a
+// scaffold whose body is the user's to write, like the stub for a tool with
+// source kind "runtime" (SPEC.md §3.3). Write stops overwriting such a file
+// the moment its contents differ from the stub it last wrote. Data must still
+// be a pure function of the spec — Preserve changes when a file is written,
+// never what is generated.
 type File struct {
-	Path string
-	Data []byte
+	Path     string
+	Data     []byte
+	Preserve bool
 }
 
 // Job bundles the inputs a Generator consumes: the loaded module, its

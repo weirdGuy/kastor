@@ -76,6 +76,49 @@ Implemented targets:
 
 There is no implemented `kastor compile` command. Use `kastor build`.
 
+### Generated output is disposable — with one exception
+
+`kastor build` owns its output directory. It rewrites the files it generates,
+deletes visible files it no longer generates, and refuses to touch a non-empty
+directory that has no `.kastorbuild` marker. Hidden entries (`.venv`, `.eve/`,
+`.env.local`) are always left alone.
+
+The exception is a tool with `kind = "runtime"`. Its body is your code, so the
+generated stub is written **once** and then belongs to you:
+
+| State of the file on disk | What the next build does |
+| --- | --- |
+| Missing, or still byte-identical to the stub kastor wrote | Writes or regenerates it |
+| You edited it, spec unchanged | Leaves it alone, silently |
+| You edited it, spec changed the tool | Leaves it alone; writes the new stub to `<name>.kastor-new` beside it and says so, once |
+| You edited it, tool removed from the spec | Keeps the file instead of deleting it, and says so, once |
+| You reverted it to the current stub | Takes ownership back and removes the sidecar |
+
+So implement the stub in place — you no longer need to keep the real logic in a
+separate file and call into it.
+
+A `.kastor-new` sidecar is a plain file, deliberately visible, and inert to
+Python and TypeScript because of its suffix. It is the build telling you the
+generated interface moved underneath your implementation: diff the pair, carry
+the change into your file, then delete the sidecar.
+
+```bash
+kastor build examples/scheduler
+# kastor: target.langgraph: 1 generated stub changed under your implementation; your files were kept:
+#   gen/langgraph/tools/create_draft.py — new stub: gen/langgraph/tools/create_draft.py.kastor-new
+#   fix: diff each pair, carry the change into your file, then delete the .kastor-new file
+
+diff gen/langgraph/tools/create_draft.py.kastor-new gen/langgraph/tools/create_draft.py
+```
+
+These warnings go to stderr and do **not** fail the build: the code was
+generated and synced, so `kastor build` still exits `0`.
+
+Ownership is tracked in the `.kastorbuild` marker at the root of the output
+directory. Deleting it is safe but forgetful — with no record, kastor can no
+longer tell its own untouched stub from your implementation, so it treats every
+existing file as yours.
+
 ## `kastor plan`
 
 Compare the spec, state file, and remote platform for platform targets.

@@ -267,13 +267,18 @@ func (pb *projectBuilder) emitAgentDir(a *schema.Agent, dir, parent string, orde
 		if err != nil {
 			return err
 		}
-		pb.add(dir+"tools/"+tool.Name+".ts", data)
+		path := dir + "tools/" + toolFile(tool)
 		switch tool.Source.Kind {
 		case "runtime":
 			pb.runtime = appendUnique(pb.runtime, tool)
+			// The stub's body is the user's code, so the file is written once
+			// and preserved from then on (SPEC.md §3.3).
+			pb.files = append(pb.files, build.File{Path: path, Data: data, Preserve: true})
+			continue
 		case "http":
 			pb.http = appendUnique(pb.http, tool)
 		}
+		pb.add(path, data)
 	}
 
 	servers, err := groupMCPServers(mcpTools)

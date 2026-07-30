@@ -73,7 +73,7 @@ func runBuild(stdout, stderr io.Writer, dir, targetName string) error {
 	}
 
 	for _, tgt := range targets {
-		if err := buildTarget(stdout, mod, g, tgt); err != nil {
+		if err := buildTarget(stdout, stderr, mod, g, tgt); err != nil {
 			return err
 		}
 	}
@@ -114,7 +114,7 @@ func selectTargets(mod *module.Module, name string) ([]*schema.Target, error) {
 // buildTarget generates one codegen target and syncs the files into its
 // output directory. Generation failures keep the default exit code 1
 // (codegen errors); sync failures are IO errors, exit 2.
-func buildTarget(stdout io.Writer, mod *module.Module, g *graph.Graph, tgt *schema.Target) error {
+func buildTarget(stdout, stderr io.Writer, mod *module.Module, g *graph.Graph, tgt *schema.Target) error {
 	gen, ok := generators[tgt.Name]
 	if !ok {
 		return fmt.Errorf("%s: no code generator named %q (available: %s)", tgt.Addr(), tgt.Name, strings.Join(generatorNames(), ", "))
@@ -129,12 +129,41 @@ func buildTarget(stdout io.Writer, mod *module.Module, g *graph.Graph, tgt *sche
 	if err != nil {
 		return err
 	}
-	if err := build.Write(outDir, files); err != nil {
+	report, err := build.Write(outDir, files)
+	if err != nil {
 		return withExitCode(2, fmt.Errorf("%s: %w", tgt.Addr(), err))
 	}
 
+	reportPreserved(stderr, tgt, outDir, report)
 	fmt.Fprintf(stdout, "Built target %s: %s → %s\n", tgt.Name, countNoun(len(files), "file"), displayPath(outDir))
 	return nil
+}
+
+// reportPreserved warns about generated-once files the sync had to step around:
+// stubs the user has implemented that the spec has since changed, and
+// implementations the spec no longer generates at all. Neither is an error —
+// the build succeeded — but silence would hide a spec change from the only
+// person who can act on it. Warnings go to stderr, keeping stdout the summary.
+func reportPreserved(stderr io.Writer, tgt *schema.Target, outDir string, report *build.Report) {
+	if len(report.Superseded) > 0 {
+		fmt.Fprintf(stderr, "kastor: %s: %s changed under your implementation; your files were kept:\n",
+			tgt.Addr(), countNoun(len(report.Superseded), "generated stub"))
+		for _, c := range report.Superseded {
+			fmt.Fprintf(stderr, "  %s — new stub: %s\n",
+				displayPath(filepath.Join(outDir, filepath.FromSlash(c.Path))),
+				displayPath(filepath.Join(outDir, filepath.FromSlash(c.Sidecar))))
+		}
+		fmt.Fprintf(stderr, "  fix: diff each pair, carry the change into your file, then delete the %s file\n", build.SidecarSuffix)
+	}
+
+	if len(report.Orphaned) > 0 {
+		fmt.Fprintf(stderr, "kastor: %s: %s no longer generated but holding your implementation; kept, not removed:\n",
+			tgt.Addr(), countNoun(len(report.Orphaned), "file"))
+		for _, p := range report.Orphaned {
+			fmt.Fprintf(stderr, "  %s\n", displayPath(filepath.Join(outDir, filepath.FromSlash(p))))
+		}
+		fmt.Fprintf(stderr, "  fix: delete each one once you are sure the tool it implemented is gone for good\n")
+	}
 }
 
 func codegenNames(mod *module.Module) []string {

@@ -40,7 +40,7 @@ gofmt -l .                     # formatting check (must be clean)
 - Table-driven tests; fixtures live in `testdata/` per package (valid + invalid HCL samples)
 - Every parser/validation feature needs at least one negative test (bad input → expected diagnostic)
 - Providers implement the common interface: `Read / Create / Update / Delete / Diff`
-- Keep codegen output deterministic — same spec must always produce byte-identical output (needed for testing and CI diffs)
+- Keep codegen deterministic — `Generate` must be a pure function of the spec, producing byte-identical files every run (needed for testing and CI diffs); what `build.Write` then does with those bytes may depend on the output directory's state, since a `runtime` stub the user has implemented is never overwritten
 
 ## Domain rules to enforce (from SPEC.md)
 
