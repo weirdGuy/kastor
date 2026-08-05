@@ -20,11 +20,17 @@
       "configs": [
         {
           "name": "read",
-          "enabled": true
+          "enabled": true,
+          "permission_policy": {
+            "type": "always_allow"
+          }
         },
         {
           "name": "write",
-          "enabled": true
+          "enabled": true,
+          "permission_policy": {
+            "type": "always_allow"
+          }
         }
       ]
     },
@@ -40,7 +46,10 @@
       "configs": [
         {
           "name": "get_issue",
-          "enabled": true
+          "enabled": true,
+          "permission_policy": {
+            "type": "always_allow"
+          }
         }
       ]
     }

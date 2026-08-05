@@ -308,6 +308,8 @@ Every MCP server named by a tool's `mcp://<server>/<tool>` URI needs an endpoint
 
 Kastor stamps `metadata.kastor_managed = "<block address>"` on every agent it creates and refuses to compare a remote agent that does not carry the marker, so an agent created by hand in the Console cannot be overwritten by an apply.
 
+Declaring a tool is the grant. If `agent.x` lists `tool.y`, kastor sets that tool's permission policy to `always_allow` on the remote agent, so the deployed agent can call every tool it declares without a trip to the Console. The permission is part of the compared object: flipping a tool to deny in the Console shows up in `kastor plan` as drift, and `kastor apply` sets it back. The policy is not configurable in the spec yet — every declared tool is allowed.
+
 The Managed Agents resource is narrower than the Kastor agent block, and fields that are meaningless for a target are errors rather than silently ignored:
 
 | Spec | Result on `claude_agents` |

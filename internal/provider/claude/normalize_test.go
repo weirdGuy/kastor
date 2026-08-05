@@ -85,14 +85,22 @@ func TestNormalizeStateConfigMatchesGoldenEcho(t *testing.T) {
 	}
 }
 
-func TestGoldenEchoToolConfigsContainOnlyEnablement(t *testing.T) {
+// TestGoldenEchoToolConfigsCarryPermissions pins the response shape the rest
+// of the suite is written against: the API returns a permission on every tool
+// config, so a fixture that omits one would hide exactly the attribute KAS-57
+// is about.
+func TestGoldenEchoToolConfigsCarryPermissions(t *testing.T) {
 	echo := loadObject(t, "full_api_response.json")
 	for i, rawToolset := range echo["tools"].([]any) {
 		toolset := rawToolset.(map[string]any)
 		for j, rawConfig := range toolset["configs"].([]any) {
 			config := rawConfig.(map[string]any)
-			if len(config) != 2 || config["name"] == nil || config["enabled"] == nil {
-				t.Errorf("tools[%d].configs[%d] = %#v, want only name and enabled", i, j, config)
+			if len(config) != 3 || config["name"] == nil || config["enabled"] == nil {
+				t.Errorf("tools[%d].configs[%d] = %#v, want name, enabled and permission_policy", i, j, config)
+			}
+			policy, ok := config["permission_policy"].(map[string]any)
+			if !ok || policy["type"] == "" {
+				t.Errorf("tools[%d].configs[%d].permission_policy = %#v, want a typed policy", i, j, config["permission_policy"])
 			}
 		}
 	}
@@ -126,30 +134,141 @@ func TestNormalizedStatePreservesAppliedMCPURL(t *testing.T) {
 	}
 }
 
-func TestNormalizeRequestOmitsPerToolPermissionPolicies(t *testing.T) {
-	stateConfig, err := New().NormalizeStateConfig(fullResource(t))
-	if err != nil {
-		t.Fatalf("NormalizeStateConfig: %v", err)
-	}
-	for _, rawToolset := range stateConfig["tools"].([]any) {
-		toolset := rawToolset.(map[string]any)
-		for _, rawConfig := range toolset["configs"].([]any) {
-			rawConfig.(map[string]any)["permission_policy"] = map[string]any{"type": "always_ask"}
-		}
-	}
-
-	request, err := normalizeAPIRequest(&provider.Resource{Addr: "agent.weather", Config: stateConfig})
+// TestNormalizeRequestGrantsEveryDeclaredTool is the KAS-57 contract on the
+// write path: declaring a tool is the grant, so no tool in the agent closure
+// may leave its permission to the platform's restrictive default.
+func TestNormalizeRequestGrantsEveryDeclaredTool(t *testing.T) {
+	request, err := normalizeAPIRequest(fullResource(t))
 	if err != nil {
 		t.Fatalf("normalizeAPIRequest: %v", err)
 	}
+
+	granted := map[string]any{}
 	for i, rawToolset := range request["tools"].([]any) {
 		toolset := rawToolset.(map[string]any)
 		for j, rawConfig := range toolset["configs"].([]any) {
 			config := rawConfig.(map[string]any)
-			if _, exists := config["permission_policy"]; exists {
-				t.Errorf("request.tools[%d].configs[%d] authors permission_policy: %#v", i, j, config)
+			want := map[string]any{"type": alwaysAllowPolicy}
+			if diff := cmp.Diff(want, config["permission_policy"]); diff != "" {
+				t.Errorf("request.tools[%d].configs[%d] permission (-want +got):\n%s", i, j, diff)
+			}
+			granted[config["name"].(string)] = config["permission_policy"]
+		}
+		// The MCP toolset default governs the tools the agent does not
+		// declare, so the request must still leave it to the platform.
+		if toolset["type"] != mcpToolsetType {
+			continue
+		}
+		defaultConfig := toolset["default_config"].(map[string]any)
+		if _, exists := defaultConfig["permission_policy"]; exists {
+			t.Errorf("request.tools[%d].default_config authors permission_policy: %#v", i, defaultConfig)
+		}
+	}
+
+	for _, name := range []string{"read", "write", "get_issue"} {
+		if granted[name] == nil {
+			t.Errorf("request does not grant declared tool %q: granted = %v", name, granted)
+		}
+	}
+}
+
+// TestUpdateParamsGrantEveryDeclaredTool covers the reconcile half: an agent
+// whose tools were flipped to deny in the console must be sent back to the
+// spec's grant, not merely left alone.
+func TestUpdateParamsGrantEveryDeclaredTool(t *testing.T) {
+	params, err := normalizeUpdateParams(fullResource(t), 7)
+	if err != nil {
+		t.Fatalf("normalizeUpdateParams: %v", err)
+	}
+	body, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("marshal update params: %v", err)
+	}
+	var request provider.Object
+	if err := json.Unmarshal(body, &request); err != nil {
+		t.Fatalf("decode update params: %v", err)
+	}
+
+	for i, rawToolset := range request["tools"].([]any) {
+		toolset := rawToolset.(map[string]any)
+		for j, rawConfig := range toolset["configs"].([]any) {
+			config := rawConfig.(map[string]any)
+			want := map[string]any{"type": alwaysAllowPolicy}
+			if diff := cmp.Diff(want, config["permission_policy"]); diff != "" {
+				t.Errorf("update.tools[%d].configs[%d] permission (-want +got):\n%s", i, j, diff)
 			}
 		}
+	}
+}
+
+// TestDiffReportsConsoleSideToolDenialAsDrift is the KAS-57 negative test: a
+// tool flipped to deny outside kastor must show up as drift naming the
+// attribute, not as a silent no-op plan.
+func TestDiffReportsConsoleSideToolDenialAsDrift(t *testing.T) {
+	desired := fullResource(t)
+	stateConfig, err := New().NormalizeStateConfig(desired)
+	if err != nil {
+		t.Fatalf("NormalizeStateConfig: %v", err)
+	}
+
+	remote := loadObject(t, "full_api_response.json")
+	mcpToolset := remote["tools"].([]any)[1].(map[string]any)
+	denied := mcpToolset["configs"].([]any)[0].(map[string]any)
+	denied["permission_policy"] = map[string]any{"type": "always_deny"}
+
+	for _, tt := range []struct {
+		name   string
+		config provider.Object
+	}{
+		{name: "against the spec", config: desired.Config},
+		{name: "against last-applied state", config: stateConfig},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			diffs, err := New().Diff(&provider.Resource{Addr: desired.Addr, Config: tt.config}, remote)
+			if err != nil {
+				t.Fatalf("Diff: %v", err)
+			}
+			if diff := cmp.Diff([]string{"tools[1]"}, paths(diffs)); diff != "" {
+				t.Fatalf("drift paths (-want +got):\n%s", diff)
+			}
+
+			old := diffs[0].Old.(map[string]any)["configs"].([]any)[0].(map[string]any)
+			if got := old["permission_policy"]; !cmp.Equal(got, map[string]any{"type": "always_deny"}) {
+				t.Errorf("drift does not report the remote denial: %#v", got)
+			}
+			want := diffs[0].New.(map[string]any)["configs"].([]any)[0].(map[string]any)
+			if got := want["permission_policy"]; !cmp.Equal(got, map[string]any{"type": alwaysAllowPolicy}) {
+				t.Errorf("drift does not name the grant kastor will restore: %#v", got)
+			}
+		})
+	}
+}
+
+// TestDiffAcceptsPreKAS57StateConfigs keeps the upgrade path quiet: a config
+// written before kastor authored permissions must still normalize, so plan
+// reports the remote denial rather than failing to read its own state.
+func TestDiffAcceptsPreKAS57StateConfigs(t *testing.T) {
+	desired := fullResource(t)
+	legacy, err := New().NormalizeStateConfig(desired)
+	if err != nil {
+		t.Fatalf("NormalizeStateConfig: %v", err)
+	}
+	for _, rawToolset := range legacy["tools"].([]any) {
+		toolset := rawToolset.(map[string]any)
+		for _, rawConfig := range toolset["configs"].([]any) {
+			delete(rawConfig.(map[string]any), "permission_policy")
+		}
+	}
+
+	diffs, err := New().Diff(
+		&provider.Resource{Addr: desired.Addr, Config: legacy},
+		loadObject(t, "full_api_response.json"),
+	)
+	if err != nil {
+		t.Fatalf("Diff pre-KAS-57 state config: %v", err)
+	}
+	if len(diffs) != 0 {
+		t.Errorf("pre-KAS-57 state config drifts against a granted remote: %#v", diffs)
 	}
 }
 
