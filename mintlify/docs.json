@@ -36,7 +36,8 @@
         "group": "Reference",
         "pages": [
           "reference/language",
-          "reference/cli"
+          "reference/cli",
+          "reference/vscode"
         ]
       },
       {

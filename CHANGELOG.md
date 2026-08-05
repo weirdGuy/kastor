@@ -10,6 +10,21 @@ v0 exit criteria ([KAS-36](https://linear.app/getkastor/issue/KAS-36)) are met.
 
 ## [Unreleased]
 
+### Added
+
+- VS Code extension (`extensions/vscode/`): syntax highlighting and file icons
+  for `.agent`, `.tool`, `.prompt`, `.kastor`, and `kastor.hcl` (KAS-56)
+
+  Highlighting only — no language server, no commands, no settings. The grammar
+  uses HashiCorp's TextMate scope vocabulary, so Kastor inherits each theme's
+  Terraform colors, and adds rules for the constructs that are Kastor's own:
+  block references, the bare type keywords, the `source` kind and `target` type
+  enums, and `{{variable}}` prompt templates. HCL that Kastor rejects
+  (`${...}`, heredocs, functions, `for`, ternaries) is deliberately left
+  uncolored. Icons ship as language icons and appear under the default Seti
+  icon theme with no configuration. Packaged but not yet published; the
+  extension's README documents the publish command.
+
 ## [0.2.0] - 2026-07-30
 
 ### Added

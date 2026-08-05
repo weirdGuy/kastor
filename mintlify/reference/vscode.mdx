@@ -1,0 +1,107 @@
+---
+title: "VS Code extension"
+description: "Syntax highlighting and file icons for Kastor files in VS Code."
+---
+
+The Kastor VS Code extension highlights every Kastor file type and gives each one
+a distinct file icon.
+
+It is presentation only. It adds no commands, no settings, and no language
+server. Diagnostics stay with `kastor validate`.
+
+## Install
+
+The extension is not on the Marketplace yet. Build and install it from the repo:
+
+```bash
+cd extensions/vscode
+npm install
+npm run package
+code --install-extension kastor-0.1.0.vsix
+```
+
+Open any Kastor file and it activates. No configuration is required.
+
+## File types
+
+| Extension | Language | Contents |
+| --- | --- | --- |
+| `.agent` | Kastor Agent | model, prompt, tools, inputs, outputs, dependencies |
+| `.tool` | Kastor Tool | tool interface plus implementation source |
+| `.prompt` | Kastor Prompt | HCL frontmatter plus a `{{variable}}` template body |
+| `.kastor`, `kastor.hcl` | Kastor Project | models, targets, defaults |
+
+`kastor.hcl` is matched by filename, not by the `.hcl` extension, because that is
+what the module loader accepts. Other `.hcl` files in your tree are left to the
+Terraform extension.
+
+## What gets highlighted
+
+Block types, labels, attributes, strings, numbers, booleans, and comments use the
+same TextMate scopes as HashiCorp's HCL grammar, so Kastor picks up your theme's
+Terraform colors without configuration.
+
+Three rules cover the constructs that are Kastor's own.
+
+**References.** `model.fast`, `prompt.weather_system`, and
+`agent.forecast.output.summary` scope the root separately from the members,
+because references are what build the dependency graph.
+
+**Closed enums.** `type = string | number | bool`, `kind` on a `source` block,
+and `type` on a `target` block. A value outside its enum stays an ordinary
+string, so a typo is visible before you run `kastor validate`:
+
+```hcl
+source {
+  kind = "mcp"   # highlighted as a keyword
+  kind = "mcpp"  # stays a plain string
+}
+```
+
+`provider` is deliberately excluded. Any provider string parses — the target
+decides what it can map — so highlighting a fixed set would be wrong.
+
+**Prompt variables.** `{{location}}` in a `.prompt` body, matched with exactly
+the regex the parser uses. Anything that regex rejects is literal body text and
+stays uncolored, which is the language's rule rather than a gap:
+
+```text
+---
+name     = "weather_system"
+requires = ["location"]
+---
+Asking about {{location}} and {{ date }}.
+
+Not variables, just prose: {{1bad}} {{not-a-var}}
+```
+
+A `---` line inside the body is prose as well. Only a `---` on the first line of
+the file opens frontmatter.
+
+### Left uncolored on purpose
+
+`${...}` interpolation, heredocs, function calls, `for` expressions, and
+ternaries are valid HCL that Kastor rejects. Highlighting them would suggest they
+work.
+
+## File icons
+
+Icons are contributed as VS Code *language icons*. They appear under **Seti**,
+the default file icon theme, with no setup.
+
+VS Code has no mechanism for adding icons to a third-party icon theme. Under
+Material Icon Theme, vscode-icons, or similar, Kastor files keep that theme's
+generic file icon. Syntax highlighting is unaffected.
+
+## Development
+
+The extension lives in `extensions/vscode/`. From that directory:
+
+```bash
+npm install
+npm test          # grammar assertions plus a prompt snapshot
+npm run package   # produces the .vsix
+```
+
+Press <kbd>F5</kbd> with the folder open in VS Code to launch an Extension
+Development Host with the extension loaded.

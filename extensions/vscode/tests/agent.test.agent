@@ -1,0 +1,46 @@
+# SYNTAX TEST "source.kastor" "agent blocks"
+
+agent "weather" {
+# <- entity.name.type.kastor
+#^^^^ entity.name.type.kastor
+#      ^^^^^^^ variable.other.enummember.kastor
+#               ^ punctuation.section.block.begin.kastor
+  description = "Answers weather questions"
+# ^^^^^^^^^^^ variable.other.readwrite.kastor
+#             ^ keyword.operator.assignment.kastor
+#                ^^^^^^^^^^^^^^^^^^^^^^^^^ string.quoted.double.kastor
+  model         = model.fast
+# ^^^^^ variable.other.readwrite.kastor
+#                 ^^^^^ support.class.kastor
+#                      ^ keyword.operator.accessor.kastor
+#                       ^^^^ variable.other.member.kastor
+  system_prompt = prompt.weather_system
+#                 ^^^^^^ support.class.kastor
+#                        ^^^^^^^^^^^^^^ variable.other.member.kastor
+  tools = [tool.web_search]
+#         ^ punctuation.section.brackets.begin.kastor
+#          ^^^^ support.class.kastor
+#               ^^^^^^^^^^ variable.other.member.kastor
+#                         ^ punctuation.section.brackets.end.kastor
+  input "date" {
+# ^^^^^ entity.name.type.kastor
+#        ^^^^ variable.other.enummember.kastor
+    type     = string
+#   ^^^^ variable.other.readwrite.kastor
+#              ^^^^^^ storage.type.kastor
+    optional = true
+#              ^^^^ constant.language.kastor
+    default = agent.forecast.output.summary
+#             ^^^^^ support.class.kastor
+#                   ^^^^^^^^ variable.other.member.kastor
+#                            ^^^^^^ variable.other.member.kastor
+#                                   ^^^^^^^ variable.other.member.kastor
+  depends_on = [agent.geocoder]
+# ^^^^^^^^^^ variable.other.readwrite.kastor
+#               ^^^^^ support.class.kastor
+#                     ^^^^^^^^ variable.other.member.kastor
+  # TODO: add a humidity output
+# ^ comment.line.number-sign.kastor
+#   ^^^^ keyword.codetag.notation.kastor
+}
+# <- punctuation.section.block.end.kastor

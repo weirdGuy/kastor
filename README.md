@@ -27,6 +27,7 @@ Working today:
 - run `kastor plan` / `kastor apply` / `kastor destroy` against the built-in in-memory platform
 - reconcile hosted [Claude Managed Agents](#quickstart-hosted-claude-agents) with `target "claude_agents"`
 - local state file, three-way diffs, and drift detection
+- [VS Code syntax highlighting and file icons](#vs-code-support)
 - examples: [weather agent](examples/weather), [content scheduler](examples/scheduler), [support triage](examples/support-triage)
 
 Planned for v0:
@@ -405,6 +406,40 @@ A Kastor module is a directory tree containing declarative files:
 References connect blocks by address, not by file path. For example, an agent references `model.fast`, `prompt.weather_system`, and `tool.web_search`.
 
 References also build the dependency graph. A reference like `agent.forecast.output.summary` validates that the output exists and orders the graph.
+
+## VS Code support
+
+The [`extensions/vscode`](extensions/vscode) extension adds syntax highlighting
+and file icons for every Kastor file type. Highlighting only — no language
+server, no commands, no settings.
+
+Until it is on the Marketplace, install it from source:
+
+```sh
+cd extensions/vscode
+npm install
+npm run package
+code --install-extension kastor-0.1.0.vsix
+```
+
+Open any Kastor file and it activates. The grammar uses HashiCorp's TextMate
+scope names, so Kastor picks up your theme's Terraform colors, with extra rules
+for the constructs that are Kastor's own: block references, the bare type
+keywords, the `source` kind and `target` type enums, and `{{variable}}` prompt
+templates.
+
+Two details worth knowing:
+
+- HCL that Kastor rejects — `${...}` interpolation, heredocs, function calls,
+  `for` expressions, ternaries — is deliberately left uncolored, because
+  highlighting it would suggest it works.
+- Icons ship as VS Code *language icons*, which appear under Seti, the default
+  file icon theme. VS Code offers no way to add icons to a third-party icon
+  theme, so under Material Icon Theme or vscode-icons, Kastor files keep that
+  theme's generic icon.
+
+The extension's [README](extensions/vscode/README.md) covers development and
+publishing.
 
 ## What Kastor is not
 
