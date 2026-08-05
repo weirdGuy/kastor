@@ -1,0 +1,29 @@
+# SYNTAX TEST "source.kastor" "project files"
+
+model "fast" {
+# <- entity.name.type.kastor
+#^^^^ entity.name.type.kastor
+#      ^^^^ variable.other.enummember.kastor
+  provider = "openai"
+# ^^^^^^^^ variable.other.readwrite.kastor
+#             ^^^^^^ string.quoted.double.kastor
+  params {
+# ^^^^^^ entity.name.type.kastor
+    temperature = 0.2
+#   ^^^^^^^^^^^ variable.other.readwrite.kastor
+#                 ^^^ constant.numeric.float.kastor
+    max_tokens  = 4096
+#                 ^^^^ constant.numeric.integer.kastor
+target "langgraph" {
+# <- entity.name.type.kastor
+#^^^^^ entity.name.type.kastor
+#       ^^^^^^^^^ variable.other.enummember.kastor
+  type   = "codegen"
+#           ^^^^^^^ support.constant.kastor
+  output = "./gen/langgraph"
+# ^^^^^^ variable.other.readwrite.kastor
+#           ^^^^^^^^^^^^^^^ string.quoted.double.kastor
+  auth {
+# ^^^^ entity.name.type.kastor
+    api_key_env = "ANTHROPIC_API_KEY"
+#   ^^^^^^^^^^^ variable.other.readwrite.kastor

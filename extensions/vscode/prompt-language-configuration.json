@@ -1,0 +1,9 @@
+{
+  "brackets": [["{", "}"]],
+  "autoClosingPairs": [{ "open": "{", "close": "}" }],
+  "surroundingPairs": [
+    ["{", "}"],
+    ["\"", "\""]
+  ],
+  "wordPattern": "[A-Za-z_][A-Za-z0-9_]*"
+}

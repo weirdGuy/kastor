@@ -1,0 +1,99 @@
+{
+  "name": "kastor",
+  "displayName": "Kastor",
+  "description": "Syntax highlighting and file icons for Kastor agent specs: .agent, .tool, .prompt, and kastor.hcl.",
+  "version": "0.1.0",
+  "publisher": "getkastor",
+  "license": "Apache-2.0",
+  "icon": "icons/marketplace.png",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": ["Programming Languages"],
+  "keywords": ["kastor", "hcl", "ai agents", "agents", "terraform"],
+  "homepage": "https://github.com/weirdGuy/kastor/tree/main/extensions/vscode",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/weirdGuy/kastor.git",
+    "directory": "extensions/vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/weirdGuy/kastor/issues"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "kastor-agent",
+        "aliases": ["Kastor Agent", "kastor-agent"],
+        "extensions": [".agent"],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/agent-light.svg",
+          "dark": "./icons/agent-dark.svg"
+        }
+      },
+      {
+        "id": "kastor-tool",
+        "aliases": ["Kastor Tool", "kastor-tool"],
+        "extensions": [".tool"],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/tool-light.svg",
+          "dark": "./icons/tool-dark.svg"
+        }
+      },
+      {
+        "id": "kastor-project",
+        "aliases": ["Kastor Project", "kastor-project"],
+        "extensions": [".kastor"],
+        "filenames": ["kastor.hcl"],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/project-light.svg",
+          "dark": "./icons/project-dark.svg"
+        }
+      },
+      {
+        "id": "kastor-prompt",
+        "aliases": ["Kastor Prompt", "kastor-prompt"],
+        "extensions": [".prompt"],
+        "configuration": "./prompt-language-configuration.json",
+        "icon": {
+          "light": "./icons/prompt-light.svg",
+          "dark": "./icons/prompt-dark.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "kastor-agent",
+        "scopeName": "source.kastor",
+        "path": "./syntaxes/kastor.tmLanguage.json"
+      },
+      {
+        "language": "kastor-tool",
+        "scopeName": "source.kastor",
+        "path": "./syntaxes/kastor.tmLanguage.json"
+      },
+      {
+        "language": "kastor-project",
+        "scopeName": "source.kastor",
+        "path": "./syntaxes/kastor.tmLanguage.json"
+      },
+      {
+        "language": "kastor-prompt",
+        "scopeName": "source.kastor.prompt",
+        "path": "./syntaxes/kastor-prompt.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "test": "vscode-tmgrammar-test \"tests/*.test.*\" && vscode-tmgrammar-snap \"tests/snap/*.prompt\"",
+    "test:update": "vscode-tmgrammar-snap -u \"tests/snap/*.prompt\"",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.2.1",
+    "vscode-tmgrammar-test": "^0.1.3"
+  }
+}

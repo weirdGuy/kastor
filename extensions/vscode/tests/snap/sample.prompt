@@ -1,0 +1,15 @@
+---
+name     = "weather_system"
+requires = ["location", "forecast_context"]
+---
+You are a weather assistant. The user is asking about {{location}}.
+
+Spaced variables are variables too: {{ forecast_context }}.
+
+These are literal body text, not variables: {{1bad}} {{not-a-var}} {{
+
+Separate the posts with a line containing only:
+
+---
+
+Answer concisely using the provided tools.

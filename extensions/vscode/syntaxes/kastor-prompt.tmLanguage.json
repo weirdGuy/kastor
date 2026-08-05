@@ -1,0 +1,34 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Kastor Prompt",
+  "scopeName": "source.kastor.prompt",
+  "patterns": [
+    { "include": "#frontmatter" },
+    { "include": "#template-variable" }
+  ],
+  "repository": {
+    "frontmatter": {
+      "comment": "SPEC.md 3.4: the opening --- must be the first line of the file, hence \\A. The interior is HCL, so it reuses the main grammar wholesale.",
+      "begin": "\\A(---)[ \\t]*$",
+      "end": "^(---)[ \\t]*$",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.kastor" }
+      },
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.end.kastor" }
+      },
+      "contentName": "meta.embedded.block.frontmatter.kastor",
+      "patterns": [{ "include": "source.kastor" }]
+    },
+
+    "template-variable": {
+      "comment": "Character-for-character promptVarPattern from internal/parser/prompt.go. Anything this does not match is literal body text per SPEC.md 3.4, so leaving {{1bad}} uncolored is the correct answer, not a gap.",
+      "match": "(\\{\\{)\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(\\}\\})",
+      "captures": {
+        "1": { "name": "punctuation.definition.template.begin.kastor" },
+        "2": { "name": "variable.other.template.kastor" },
+        "3": { "name": "punctuation.definition.template.end.kastor" }
+      }
+    }
+  }
+}

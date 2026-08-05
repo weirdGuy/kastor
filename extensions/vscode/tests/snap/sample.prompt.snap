@@ -1,0 +1,55 @@
+>---
+#^^^ source.kastor.prompt punctuation.definition.tag.begin.kastor
+>name     = "weather_system"
+#^^^^ source.kastor.prompt meta.embedded.block.frontmatter.kastor variable.declaration.kastor variable.other.readwrite.kastor
+#    ^^^^^ source.kastor.prompt meta.embedded.block.frontmatter.kastor variable.declaration.kastor
+#         ^ source.kastor.prompt meta.embedded.block.frontmatter.kastor variable.declaration.kastor keyword.operator.assignment.kastor
+#          ^ source.kastor.prompt meta.embedded.block.frontmatter.kastor
+#           ^ source.kastor.prompt meta.embedded.block.frontmatter.kastor string.quoted.double.kastor punctuation.definition.string.begin.kastor
+#            ^^^^^^^^^^^^^^ source.kastor.prompt meta.embedded.block.frontmatter.kastor string.quoted.double.kastor
+#                          ^ source.kastor.prompt meta.embedded.block.frontmatter.kastor string.quoted.double.kastor punctuation.definition.string.end.kastor
+>requires = ["location", "forecast_context"]
+#^^^^^^^^ source.kastor.prompt meta.embedded.block.frontmatter.kastor variable.declaration.kastor variable.other.readwrite.kastor
+#        ^ source.kastor.prompt meta.embedded.block.frontmatter.kastor variable.declaration.kastor
+#         ^ source.kastor.prompt meta.embedded.block.frontmatter.kastor variable.declaration.kastor keyword.operator.assignment.kastor
+#          ^ source.kastor.prompt meta.embedded.block.frontmatter.kastor
+#           ^ source.kastor.prompt meta.embedded.block.frontmatter.kastor punctuation.section.brackets.begin.kastor
+#            ^ source.kastor.prompt meta.embedded.block.frontmatter.kastor string.quoted.double.kastor punctuation.definition.string.begin.kastor
+#             ^^^^^^^^ source.kastor.prompt meta.embedded.block.frontmatter.kastor string.quoted.double.kastor
+#                     ^ source.kastor.prompt meta.embedded.block.frontmatter.kastor string.quoted.double.kastor punctuation.definition.string.end.kastor
+#                      ^ source.kastor.prompt meta.embedded.block.frontmatter.kastor punctuation.separator.kastor
+#                       ^ source.kastor.prompt meta.embedded.block.frontmatter.kastor
+#                        ^ source.kastor.prompt meta.embedded.block.frontmatter.kastor string.quoted.double.kastor punctuation.definition.string.begin.kastor
+#                         ^^^^^^^^^^^^^^^^ source.kastor.prompt meta.embedded.block.frontmatter.kastor string.quoted.double.kastor
+#                                         ^ source.kastor.prompt meta.embedded.block.frontmatter.kastor string.quoted.double.kastor punctuation.definition.string.end.kastor
+#                                          ^ source.kastor.prompt meta.embedded.block.frontmatter.kastor punctuation.section.brackets.end.kastor
+>---
+#^^^ source.kastor.prompt punctuation.definition.tag.end.kastor
+>You are a weather assistant. The user is asking about {{location}}.
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ source.kastor.prompt
+#                                                      ^^ source.kastor.prompt punctuation.definition.template.begin.kastor
+#                                                        ^^^^^^^^ source.kastor.prompt variable.other.template.kastor
+#                                                                ^^ source.kastor.prompt punctuation.definition.template.end.kastor
+#                                                                  ^^ source.kastor.prompt
+>
+>Spaced variables are variables too: {{ forecast_context }}.
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ source.kastor.prompt
+#                                    ^^ source.kastor.prompt punctuation.definition.template.begin.kastor
+#                                      ^ source.kastor.prompt
+#                                       ^^^^^^^^^^^^^^^^ source.kastor.prompt variable.other.template.kastor
+#                                                       ^ source.kastor.prompt
+#                                                        ^^ source.kastor.prompt punctuation.definition.template.end.kastor
+#                                                          ^^ source.kastor.prompt
+>
+>These are literal body text, not variables: {{1bad}} {{not-a-var}} {{
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ source.kastor.prompt
+>
+>Separate the posts with a line containing only:
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ source.kastor.prompt
+>
+>---
+#^^^^ source.kastor.prompt
+>
+>Answer concisely using the provided tools.
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ source.kastor.prompt
+>

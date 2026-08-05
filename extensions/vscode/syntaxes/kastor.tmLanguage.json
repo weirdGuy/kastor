@@ -1,0 +1,201 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Kastor",
+  "scopeName": "source.kastor",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#block" },
+    { "include": "#attribute" },
+    { "include": "#expression" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.kastor",
+          "begin": "#",
+          "end": "$",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.comment.kastor" }
+          },
+          "patterns": [{ "include": "#codetags" }]
+        },
+        {
+          "name": "comment.line.double-slash.kastor",
+          "begin": "//",
+          "end": "$",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.comment.kastor" }
+          },
+          "patterns": [{ "include": "#codetags" }]
+        },
+        {
+          "name": "comment.block.kastor",
+          "begin": "/\\*",
+          "end": "\\*/",
+          "captures": {
+            "0": { "name": "punctuation.definition.comment.kastor" }
+          },
+          "patterns": [{ "include": "#codetags" }]
+        }
+      ]
+    },
+
+    "codetags": {
+      "match": "\\b(TODO|FIXME|XXX|HACK)\\b",
+      "name": "keyword.codetag.notation.kastor"
+    },
+
+    "block": {
+      "comment": "Every block type in the language. A block type is only a block type when a brace follows, so `output` in `agent.x.output.y` is untouched.",
+      "name": "meta.block.kastor",
+      "begin": "\\b(agent|tool|model|target|input|output|param|params|returns|source|auth)\\b((?:\\s+\"[^\"]*\")*)\\s*(\\{)",
+      "end": "\\}",
+      "beginCaptures": {
+        "1": { "name": "entity.name.type.kastor" },
+        "2": { "patterns": [{ "include": "#block-label" }] },
+        "3": { "name": "punctuation.section.block.begin.kastor" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.section.block.end.kastor" }
+      },
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#block" },
+        { "include": "#attribute" },
+        { "include": "#expression" }
+      ]
+    },
+
+    "block-label": {
+      "match": "(\")([^\"]*)(\")",
+      "captures": {
+        "1": { "name": "punctuation.definition.string.begin.kastor" },
+        "2": { "name": "variable.other.enummember.kastor" },
+        "3": { "name": "punctuation.definition.string.end.kastor" }
+      }
+    },
+
+    "attribute": {
+      "patterns": [
+        { "include": "#type-keyword" },
+        { "include": "#source-kind" },
+        { "include": "#target-type" },
+        { "include": "#attribute-definition" }
+      ]
+    },
+
+    "type-keyword": {
+      "comment": "SPEC.md 3.3: param/input/output types are bare keywords, never strings. Anchored on `type` so `description = \"returns a string\"` stays a string.",
+      "match": "\\b(type)\\s*(=)\\s*\\b(string|number|bool)\\b",
+      "captures": {
+        "1": { "name": "variable.other.readwrite.kastor" },
+        "2": { "name": "keyword.operator.assignment.kastor" },
+        "3": { "name": "storage.type.kastor" }
+      }
+    },
+
+    "source-kind": {
+      "comment": "SPEC.md 3.3: closed enum. A typo stays an ordinary string, which is a free hint before `kastor validate` runs.",
+      "match": "\\b(kind)\\s*(=)\\s*(\")(mcp|http|builtin|runtime|script)(\")",
+      "captures": {
+        "1": { "name": "variable.other.readwrite.kastor" },
+        "2": { "name": "keyword.operator.assignment.kastor" },
+        "3": { "name": "punctuation.definition.string.begin.kastor" },
+        "4": { "name": "support.constant.kastor" },
+        "5": { "name": "punctuation.definition.string.end.kastor" }
+      }
+    },
+
+    "target-type": {
+      "comment": "SPEC.md 3.5: closed enum. `provider` is deliberately absent — any provider string parses, so highlighting a fixed set there would lie.",
+      "match": "\\b(type)\\s*(=)\\s*(\")(codegen|platform)(\")",
+      "captures": {
+        "1": { "name": "variable.other.readwrite.kastor" },
+        "2": { "name": "keyword.operator.assignment.kastor" },
+        "3": { "name": "punctuation.definition.string.begin.kastor" },
+        "4": { "name": "support.constant.kastor" },
+        "5": { "name": "punctuation.definition.string.end.kastor" }
+      }
+    },
+
+    "attribute-definition": {
+      "name": "variable.declaration.kastor",
+      "match": "\\b(?!null\\b|true\\b|false\\b)([A-Za-z_][A-Za-z0-9_-]*)\\s*(=)(?!=)",
+      "captures": {
+        "1": { "name": "variable.other.readwrite.kastor" },
+        "2": { "name": "keyword.operator.assignment.kastor" }
+      }
+    },
+
+    "expression": {
+      "patterns": [
+        { "include": "#reference" },
+        { "include": "#literal-constant" },
+        { "include": "#number" },
+        { "include": "#string" },
+        { "include": "#brackets" }
+      ]
+    },
+
+    "reference": {
+      "comment": "SPEC.md 4: references build the DAG. The root gets its own scope because references are what distinguishes Kastor from plain HCL.",
+      "match": "\\b(model|prompt|tool|agent)(\\.)([A-Za-z_][A-Za-z0-9_-]*)((?:\\.[A-Za-z_][A-Za-z0-9_-]*)*)",
+      "captures": {
+        "1": { "name": "support.class.kastor" },
+        "2": { "name": "keyword.operator.accessor.kastor" },
+        "3": { "name": "variable.other.member.kastor" },
+        "4": { "patterns": [{ "include": "#reference-tail" }] }
+      }
+    },
+
+    "reference-tail": {
+      "match": "(\\.)([A-Za-z_][A-Za-z0-9_-]*)",
+      "captures": {
+        "1": { "name": "keyword.operator.accessor.kastor" },
+        "2": { "name": "variable.other.member.kastor" }
+      }
+    },
+
+    "literal-constant": {
+      "match": "\\b(true|false|null)\\b",
+      "name": "constant.language.kastor"
+    },
+
+    "number": {
+      "patterns": [
+        {
+          "match": "\\b\\d+\\.\\d+(?:[eE][+-]?\\d+)?\\b",
+          "name": "constant.numeric.float.kastor"
+        },
+        {
+          "match": "\\b\\d+(?:[eE][+-]?\\d+)?\\b",
+          "name": "constant.numeric.integer.kastor"
+        }
+      ]
+    },
+
+    "string": {
+      "name": "string.quoted.double.kastor",
+      "begin": "\"",
+      "end": "\"",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.kastor" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.kastor" }
+      },
+      "patterns": [
+        { "match": "\\\\.", "name": "constant.character.escape.kastor" }
+      ]
+    },
+
+    "brackets": {
+      "patterns": [
+        { "match": "\\[", "name": "punctuation.section.brackets.begin.kastor" },
+        { "match": "\\]", "name": "punctuation.section.brackets.end.kastor" },
+        { "match": ",", "name": "punctuation.separator.kastor" }
+      ]
+    }
+  }
+}
