@@ -26,6 +26,9 @@ const (
 
 	agentToolsetType = "agent_toolset_20260401"
 	mcpToolsetType   = "mcp_toolset"
+
+	alwaysAllowPolicy = "always_allow"
+	alwaysAskPolicy   = "always_ask"
 )
 
 var managedAgentTools = map[string]bool{
@@ -129,8 +132,11 @@ func normalizeUpdateParams(desired *provider.Resource, version int64) (anthropic
 }
 
 // normalizeAPIRequest removes comparison-only defaults from the normalized
-// spec. In particular, the MCP permission default must remain omitted from
-// requests so the platform applies its approval-required default.
+// spec. The MCP toolset's default permission is the only one: it governs the
+// tools the agent does not declare, so authoring it would be Kastor asserting
+// a policy over tools it was never given. Per-tool permissions are the
+// opposite — Kastor states those explicitly on every declared tool, because
+// leaving them unset is what the platform reads as a denial (see enabledTool).
 func normalizeAPIRequest(desired *provider.Resource) (provider.Object, error) {
 	spec, _, err := normalizeDesired(desired)
 	if err != nil {
@@ -139,10 +145,6 @@ func normalizeAPIRequest(desired *provider.Resource) (provider.Object, error) {
 	request := cloneValue(spec).(provider.Object)
 	for _, value := range request["tools"].([]any) {
 		toolset := value.(map[string]any)
-		for _, rawConfig := range toolset["configs"].([]any) {
-			config := rawConfig.(map[string]any)
-			delete(config, "permission_policy")
-		}
 		if toolset["type"] == mcpToolsetType {
 			defaultConfig := toolset["default_config"].(map[string]any)
 			delete(defaultConfig, "permission_policy")
@@ -548,7 +550,7 @@ func newToolset(typ, server string) *toolsetBuilder {
 	defaultConfig := map[string]any{"enabled": false}
 	if typ == agentToolsetType {
 		defaultConfig["permission_policy"] = map[string]any{
-			"type": "always_allow",
+			"type": alwaysAllowPolicy,
 		}
 	}
 	obj := map[string]any{
@@ -562,9 +564,10 @@ func newToolset(typ, server string) *toolsetBuilder {
 }
 
 // normalizeSpecToolsetDefaults applies the API's resolved response defaults
-// to the comparison copy. The request shape produced by newToolset deliberately
-// omits the MCP permission policy so the platform keeps its safe always_ask
-// default rather than Kastor authoring an approval override.
+// to the comparison copy. Only the MCP toolset default needs this: the request
+// omits it (see normalizeAPIRequest), and the platform resolves the omission
+// to always_ask for the undeclared tools that default governs. The tools the
+// agent does declare carry their own policy and never fall through to it.
 func normalizeSpecToolsetDefaults(tools []any) []any {
 	normalized := cloneValue(tools).([]any)
 	for _, value := range normalized {
@@ -574,16 +577,27 @@ func normalizeSpecToolsetDefaults(tools []any) []any {
 		}
 		defaultConfig := toolset["default_config"].(map[string]any)
 		defaultConfig["permission_policy"] = map[string]any{
-			"type": "always_ask",
+			"type": alwaysAskPolicy,
 		}
 	}
 	return normalized
 }
 
+// enabledTool renders one declared tool. Declaring a tool in the spec is the
+// grant: an agent that lists tool.y is permitted to call it, so the permission
+// is stated on the request instead of inherited. Leaving it unset is what
+// deploys agents that cannot call any of the tools they declare — the platform
+// reads an absent permission as a denial.
+//
+// TODO(KAS-62): allow is hardcoded here. Making the permission configurable in
+// the spec is that ticket's design pass; until then every declared tool is
+// allowed, deliberately rather than by omission.
 func enabledTool(name string) map[string]any {
-	// Per-tool permission policy is deliberately absent. Kastor v0 enables the
-	// selected tool and lets it inherit the toolset's default policy.
-	return map[string]any{"name": name, "enabled": true}
+	return map[string]any{
+		"name":              name,
+		"enabled":           true,
+		"permission_policy": map[string]any{"type": alwaysAllowPolicy},
+	}
 }
 
 func unsupportedToolKind(addr, kind string) error {
@@ -658,7 +672,15 @@ func normalizeEchoTools(tools []any) ([]any, error) {
 			if err != nil {
 				return nil, err
 			}
-			normalizedConfigs[j] = map[string]any{"name": name, "enabled": enabled}
+			policy, err := normalizeEchoToolPermission(config["permission_policy"], configPath+".permission_policy")
+			if err != nil {
+				return nil, err
+			}
+			normalizedConfigs[j] = map[string]any{
+				"name":              name,
+				"enabled":           enabled,
+				"permission_policy": policy,
+			}
 		}
 
 		normalized := map[string]any{
@@ -676,6 +698,27 @@ func normalizeEchoTools(tools []any) ([]any, error) {
 		out[i] = normalized
 	}
 	return out, nil
+}
+
+// normalizeEchoToolPermission projects one declared tool's permission. The
+// API always returns the attribute; the absent case is a config written to
+// state before KAS-57, when Kastor authored no permission at all. Those read
+// as the grant the spec now states, so the first plan after the upgrade
+// reports the remote denial as the drift it is, rather than blaming the
+// state file for a value it never recorded.
+func normalizeEchoToolPermission(raw any, path string) (map[string]any, error) {
+	if raw == nil {
+		return map[string]any{"type": alwaysAllowPolicy}, nil
+	}
+	policy, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("%s must be an object, got %T", path, raw)
+	}
+	typ, err := requiredString(policy["type"], path+".type")
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"type": typ}, nil
 }
 
 func normalizeEchoDefaultToolConfig(raw any, path string) (map[string]any, error) {

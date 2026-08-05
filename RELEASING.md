@@ -68,11 +68,18 @@ Nothing below is automated. Work through it before you tag.
 export KASTOR_ACCEPTANCE=1
 export ANTHROPIC_API_KEY=...
 export KASTOR_MCP_KASTOR_ACCEPTANCE_URL=...   # must expose an "echo" tool
+export KASTOR_MCP_ACCEPTANCE_TOOL=...         # optional: name the tool it does expose
 go test ./cmd/kastor -run TestClaudeManagedAgentsAcceptance -v -count=1
 ```
 
-The test skips unless all three variables are set, so a normal `go test ./...`
-never runs it.
+The test skips unless the first three variables are set, so a normal
+`go test ./...` never runs it.
+
+`KASTOR_MCP_ACCEPTANCE_TOOL` exists because the live session step has to call a
+tool that actually exists: the acceptance module declares `echo`, and a server
+that serves something else needs its own tool named here (`tavily_search`, for
+instance). Only the name matters — a tool block's params are not sent to
+Managed Agents, because the MCP server owns the schema.
 
 **Why this is manual and not in CI:**
 
@@ -84,6 +91,15 @@ never runs it.
 - **Plan output includes the MCP server URL**, which is deployment
   configuration and frequently carries a key in its query string. A CI log is
   public; that URL must not land in one.
+
+The run also **starts one live session** against the created agent (KAS-57): it
+provisions a cloud environment, asks the agent to call its MCP `echo` tool, and
+asserts the platform evaluated that call as `allow`. This costs one short model
+turn and is the only check that the tool permission kastor writes actually
+reaches the deployed agent — a permission that is stored but ignored looks
+identical to every CRUD assertion. The session and environment are deleted
+afterwards; unlike the agent, both are reversible. The test logs the session's
+Console trace URL, which is worth opening if the turn fails.
 
 **Each run permanently archives an agent.** The test creates a real agent and
 destroys it, and `destroy` on this target means *archive*, which is

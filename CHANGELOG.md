@@ -6,9 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Kastor is pre-1.0: the v0 language semantics may still change until the
-v0 exit criteria ([KAS-36](https://linear.app/getkastor/issue/KAS-36)) are met.
+v0 exit criteria KAS-36 are met.
 
 ## [Unreleased]
+
+### Fixed
+
+- `claude_agents`: agents applied to the Claude Managed Agents platform came up
+  with every MCP tool denied, so `apply` reported success, `plan` reported no
+  drift, and the deployed agent could not call a tool it declared (KAS-57)
+
+  The provider created the agent without stating a per-tool permission, and the
+  platform's own default for an unset permission is the restrictive one.
+  Declaring a tool in the spec is now the grant: `create` sets
+  `permission_policy` to `always_allow` on every tool in the agent closure, the
+  permission is part of the compared object — so a tool flipped to deny in the
+  Console is reported as drift — and `apply` reconciles it back to the spec.
+  Making the policy configurable in the spec is a later design pass
+  KAS-62; until then every
+  declared tool is allowed.
+
+  The first plan after upgrading an agent applied by an earlier version reports
+  the remote denial as drift and proposes the converging update.
 
 ### Added
 

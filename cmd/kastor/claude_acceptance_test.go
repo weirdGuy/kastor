@@ -45,6 +45,7 @@ func TestClaudeManagedAgentsAcceptance(t *testing.T) {
 	t.Cleanup(func() { providerFactories[claudeAcceptanceTarget] = realFactory })
 
 	dir := copyModule(t, "testdata/claude_acceptance")
+	retargetAcceptanceMCPTool(t, dir)
 	destroyed := false
 	t.Cleanup(func() {
 		if destroyed {
@@ -78,6 +79,14 @@ func TestClaudeManagedAgentsAcceptance(t *testing.T) {
 		t.Fatalf("construct real Claude provider: %v", err)
 	}
 	assertAcceptanceMetadata(t, realProvider, resource.ID, marker)
+
+	// 1b. Create states the tool permission (KAS-57): every tool in the agent
+	// closure is granted on the remote object, without a console edit.
+	assertAcceptanceToolGrants(t, realProvider, resource.ID, acceptanceAllowPolicy)
+
+	// 1c. The grant is only worth anything if the agent can use it, so run one
+	// live turn and watch the platform evaluate the MCP call.
+	assertMCPToolIsCallable(t, resource.ID)
 
 	// 2. A plan immediately after creation is clean.
 	out = runAcceptanceCLI(t, "plan", dir)
@@ -128,6 +137,30 @@ func TestClaudeManagedAgentsAcceptance(t *testing.T) {
 		"Warning: "+claudeAcceptanceAddr+": remote object changed outside kastor",
 		"changed attributes: description",
 		"Plan for target.claude_agents: 0 to create, 1 to update, 0 to delete, 0 unchanged.",
+	)
+
+	// 5b. KAS-57's negative case: a tool whose grant is taken away outside
+	// kastor is drift, and apply reconciles the attribute back to the spec.
+	gated := gateAcceptanceToolOutOfBand(t, realProvider, resource.ID)
+	assertAcceptanceToolPolicy(t, realProvider, resource.ID, gated, acceptanceGatedPolicy)
+
+	out = runAcceptanceCLI(t, "plan", dir)
+	assertOutputContains(t, out,
+		"~ "+claudeAcceptanceAddr,
+		"Warning: "+claudeAcceptanceAddr+": remote object changed outside kastor",
+		// tools is a replace-whole array, so the diff names the changed
+		// toolset rather than the leaf attribute inside it.
+		"tools[",
+	)
+
+	out = runAcceptanceCLI(t, "apply", dir)
+	assertOutputContains(t, out,
+		"Applied target.claude_agents: 0 created, 1 updated, 0 deleted.",
+	)
+	assertAcceptanceToolGrants(t, realProvider, resource.ID, acceptanceAllowPolicy)
+	out = runAcceptanceCLI(t, "plan", dir)
+	assertOutputContains(t, out,
+		"No changes for target.claude_agents: remote matches the spec (1 resource).",
 	)
 
 	// 6. Destroy archives the live agent through KAS-22's existing CLI path.
