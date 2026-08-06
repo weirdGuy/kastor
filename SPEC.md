@@ -148,38 +148,82 @@ tool "web_search" {
     type = string
   }
  
-  # Exactly one implementation block:
+  # One implementation block per target; one unqualified block covers all:
   source {
     kind = "mcp"                       # mcp | http | builtin | runtime | script
     uri  = "mcp://search-server/web_search"
   }
 }
 ```
+
+Bindings may differ per target; identity and the param contract do not:
+
+```hcl
+tool "web_search" {
+  description = "Search the web"
+
+  param "query" { type = string }
+  returns { type = string }
+
+  source {
+    kind    = "builtin"
+    id      = "web_search"
+    targets = [target.claude_agents]
+  }
+
+  source {
+    kind    = "mcp"
+    uri     = "mcp://search-server/web_search"
+    targets = [target.langgraph, target.eve]
+  }
+}
+```
  
 **Source kinds:**
  
-| kind | Meaning |
-|------|---------|
-| `mcp` | Tool served by an MCP server |
-| `http` | REST endpoint (OpenAPI-style descriptor) |
-| `builtin` | Provided by target platform (e.g. the target platform's hosted web-search tool) |
-| `runtime` | Implemented in user code within the generated project (codegen emits a stub) |
-| `script` | Inline/local script executed by generated glue code |
+| kind | Meaning | Identifier |
+|------|---------|------------|
+| `mcp` | Tool served by an MCP server | `uri = "mcp://<server>/<tool>"` |
+| `http` | REST endpoint (OpenAPI-style descriptor) | `uri` — the endpoint URL |
+| `builtin` | Provided by target platform (e.g. the target platform's hosted web-search tool) | `id` — the platform's own name for the tool |
+| `runtime` | Implemented in user code within the generated project (codegen emits a stub) | none — the generated stub is the implementation |
+| `script` | Inline/local script executed by generated glue code | `uri` |
 
-**Codegen mapping (LangGraph target):**
+**Source-kind support is per target**, mirroring the model-provider matrix of §3.1. A tool block stays valid regardless of what any one target supports; a target that cannot bind the source *selected for it* (see binding selection, below) is an error.
+
+| kind | `langgraph` | `eve` | `claude_agents` |
+|------|-------------|-------|-----------------|
+| `mcp` | yes | yes — surfaced through the server connection, no `tools/` file | yes — endpoint from `KASTOR_MCP_<SERVER>_URL` |
+| `http` | yes | yes | error |
+| `runtime` | yes — generated stub | yes — generated stub | error |
+| `builtin` | error, **permanently** — platform-provided tools have no local binding | error, **permanently** | yes — `id` must name a tool in the platform toolset |
+| `script` | error — deferred (issue #36) | error — deferred (issue #36) | error |
+
+This matrix belongs to the targets, not to the module: each generator and provider declares the source kinds it supports, and **`kastor validate` cross-checks every tool against every target the module declares** (§5). Targets never declare capabilities in HCL — the matrix is part of a target's implementation, and this table is its documentation.
+
+**A declared target is a promise.** A module that cannot build or apply for a target it declares fails at `validate`, not at `build` or `plan` — which means a broken `langgraph` binding also stops `kastor plan` for a `claude_agents` target in the same module, since both commands run the same pipeline. That is the enforceable reading of "write once, target many": if a target is declared, the module is claimed to work there. A module that genuinely targets one destination declares one target; per-target `source` blocks are how a module keeps a target it would otherwise have to drop.
+
+Validate checks only what is knowable from the spec. Facts that depend on the environment — a missing MCP endpoint variable, rejected credentials — remain the provider's to report through `Diff` (§6), so `kastor validate` still needs no credentials and no network.
+
+**Codegen mapping (LangGraph target).** Applies to the source **selected for that target**:
 
 | kind | Generated binding |
 |------|-------------------|
 | `mcp` | `@tool` function calling the named server tool through a generated MCP bridge |
 | `http` | `@tool` function POSTing the tool's params as a JSON object to `uri` |
 | `runtime` | `@tool` stub raising `NotImplementedError` until user code supplies the body |
-| `builtin` | Codegen error, **permanently**: platform-provided tools have no local binding — `builtin` is only meaningful on platform targets |
-| `script` | Codegen error, **for now**: glue-code execution is deferred (issue #36) |
+| `builtin` | Unreachable: `builtin` has no local binding, and `validate` rejects a module that selects a `builtin` source for a codegen target |
+| `script` | Unreachable for the same reason, **for now**: glue-code execution is deferred (issue #36) |
 
 **Rules:**
 - `kind` is a closed enum (like `target.type`): `mcp | http | builtin | runtime | script`. Unknown kinds are compile errors.
-- Exactly one `source` block and exactly one `returns` block per tool. Zero `param` blocks is fine.
-- `uri` is required for `mcp`, `http`, and `script` sources; it is an error on `builtin` and `runtime` (they have no external location — the platform or generated stub is the implementation). Meaningless fields are errors, not ignored.
+- **At least one** `source` block and exactly one `returns` block per tool. Zero `param` blocks is fine.
+- A `source` block may declare `targets` — a list of `target.<name>` references — which restricts it to those targets. A `source` without `targets` is the tool's **default binding**; at most one per tool.
+- **Binding selection.** For target T a tool binds the source whose `targets` names T, otherwise the default. The invariant is **exactly one binding per (tool, target)** — the same guarantee "exactly one `source`" used to give, one axis richer: two sources naming the same target is an error, and a tool with no binding for a declared target is an error. Both are reported by `kastor validate`, naming the tool, the target, and the agents that use the tool.
+- `targets` entries are references to `target` blocks declared in the module; an unknown one is an error listing the declared targets. Unlike the references of §4 they create no graph edge — targets are not nodes.
+- A tool's identity and contract are shared by all of its bindings: `description`, `param`, and `returns` are declared once and cannot vary per target. A tool whose parameters differ per target is two tools.
+- Identity attributes are per-kind and exclusive. `uri` is required for `mcp`, `http`, and `script`, and an error on any other kind. `id` is required for `builtin` — it is the platform's own name for the tool (`id = "web_search"`), the same relationship `model.id` has to a `model` block's label — and an error on any other kind. `runtime` takes neither: the generated stub is the implementation. Meaningless fields are errors, not ignored.
+- A `builtin` source's `id`, not the tool's block label, is what a platform resolves. The label stays a kastor address with no vendor meaning.
 - A `runtime` stub is **generated once and then belongs to the user**: its body is user code, so `kastor build` writes the file only while it is still absent or byte-identical to the stub the last build wrote there, and never writes it again once the file has been edited. A spec change that a user's implementation cannot be merged into still has to reach them, so the build writes the new stub beside their file as a `<name>.kastor-new` sidecar and reports the pair; a stub whose tool leaves the spec entirely is kept, not deleted, and reported the same way. Each is reported once — the sidecar on disk is the durable message. Reverting a file to its current stub hands it back to kastor and clears the sidecar. Ownership is recorded in the output directory's `.kastorbuild` marker; a directory that has no such record is treated as the user's, since assuming otherwise is the only way to lose their work.
 - For `mcp` sources the `uri` pins **identity only**: `mcp://<server>/<tool>` names the server and the tool on it — nothing more. Transport and connection details (command, endpoint, headers) are deployment configuration, not spec: generated projects read them at runtime from `mcp_servers.json` (langchain-mcp-adapters connection format), overridable via the `KASTOR_MCP_CONFIG` env var.
 - Param and returns types are bare keywords, not strings: `type = string`, never `type = "string"`. Closed enum in v0: `string | number | bool` (compound types deferred to v1).
@@ -234,14 +278,14 @@ target "claude_agents" {
 - `codegen` targets require `output` and do not allow `auth`.
 - `platform` targets do not allow `output`; `auth` is optional (ambient credentials — env vars, instance roles — are the common case).
 - Fields that are meaningless for a target's type are errors, not ignored (configs rot through silent acceptance).
-- **A platform target's label selects its provider implementation**, exactly as a codegen target's label selects its generator: `target "claude_agents"` binds to the Claude Managed Agents reconciler, `target "memory"` to the built-in in-memory platform. A label with no registered provider is an error naming the available providers. (A separate `provider` attribute is deliberately deferred until something forces it — e.g. two targets on the same platform kind in one module.)
+- **A platform target's label selects its provider implementation**, exactly as a codegen target's label selects its generator: `target "claude_agents"` binds to the Claude Managed Agents reconciler, `target "memory"` to the built-in in-memory platform. A label with no registered provider is an error naming the available providers. (A separate `provider` attribute is deliberately deferred until something forces it — e.g. two targets on the same platform kind in one module.) A target's label is also how a tool's `source` block names it (§3.3).
 - The `memory` platform is built in: an **ephemeral in-memory store** so plan/apply can be demonstrated and exercised — examples, onboarding, CI — with no credentials and no network. `auth` on it is an error (meaningless fields, again). Its remote objects die with the process, so a later invocation's plan truthfully reports previously applied resources as remote-missing drift.
  
 ---
  
 ## 4. Dependency & Reference Semantics
  
-- **References create the DAG.** `agent.forecast.output.summary` makes `weather` depend on `forecast`. Same rule for `model.*`, `tool.*`, `prompt.*`.
+- **References create the DAG.** `agent.forecast.output.summary` makes `weather` depend on `forecast`. Same rule for `model.*`, `tool.*`, `prompt.*`. A `target.<name>` reference (`source.targets`, §3.3) is the one exception: it is resolved and validated like any reference but creates no edge, because targets are not nodes in the agent graph.
 - **References order and validate; v0 codegen does not move data.** A cross-agent reference is checked at compile time (the output must exist) and orders the DAG, but generated code exposes the referencing input as an ordinary caller-supplied parameter — the caller runs the upstream agent and passes the value. Wiring actual data flow is orchestration, deferred to v1 (§7).
 - `depends_on` is the explicit escape hatch for ordering without data flow (Terraform-style).
 - Cycles are a compile error.
@@ -253,7 +297,7 @@ target "claude_agents" {
 | Command | Function |
 |---------|----------|
 | `kastor init` | Scaffold project |
-| `kastor validate` | Parse + type-check + resolve references |
+| `kastor validate` | Parse + type-check + resolve references + check every tool against every declared target |
 | `kastor build [-target X]` | Codegen for framework targets |
 | `kastor plan` | Diff spec vs. state file vs. remote platform |
 | `kastor apply` | Reconcile platform targets, update state |
