@@ -27,7 +27,7 @@ Non-goals (v0): being a runtime, executing agents, evaluation/testing harnesses.
 | `.agent`  | Agent definition | model ref, prompt refs, tool refs, IO schema, deps |
 | `.tool`   | Tool specification | interface (params, returns) + implementation source |
 | `.prompt` | Prompt template | frontmatter (name, required variables) + raw body |
-| `.kastor` / `kastor.hcl` | Project file | project meta, model blocks, targets, defaults |
+| `.kastor` / `kastor.hcl` | Project file | project meta, model blocks, targets, MCP servers, defaults |
  
 All files in a directory tree form one **module** (like a Terraform module). Files reference each other by block address, not path.
  
@@ -193,7 +193,7 @@ tool "web_search" {
 
 | kind | `langgraph` | `eve` | `claude_agents` |
 |------|-------------|-------|-----------------|
-| `mcp` | yes | yes — surfaced through the server connection, no `tools/` file | yes — endpoint from `KASTOR_MCP_<SERVER>_URL` |
+| `mcp` | yes | yes — surfaced through the server connection, no `tools/` file | yes — the server is sent as a URL connection |
 | `http` | yes | yes | error |
 | `runtime` | yes — generated stub | yes — generated stub | error |
 | `builtin` | error, **permanently** — platform-provided tools have no local binding | error, **permanently** | yes — `id` must name a tool in the platform toolset |
@@ -209,7 +209,7 @@ Validate checks only what is knowable from the spec. Facts that depend on the en
 
 | kind | Generated binding |
 |------|-------------------|
-| `mcp` | `@tool` function calling the named server tool through a generated MCP bridge |
+| `mcp` | `@tool` function calling the named server tool through a generated MCP bridge, configured from the tool's `mcp_server` block (§3.6) |
 | `http` | `@tool` function POSTing the tool's params as a JSON object to `uri` |
 | `runtime` | `@tool` stub raising `NotImplementedError` until user code supplies the body |
 | `builtin` | Unreachable: `builtin` has no local binding, and `validate` rejects a module that selects a `builtin` source for a codegen target |
@@ -225,7 +225,9 @@ Validate checks only what is knowable from the spec. Facts that depend on the en
 - Identity attributes are per-kind and exclusive. `uri` is required for `mcp`, `http`, and `script`, and an error on any other kind. `id` is required for `builtin` — it is the platform's own name for the tool (`id = "web_search"`), the same relationship `model.id` has to a `model` block's label — and an error on any other kind. `runtime` takes neither: the generated stub is the implementation. Meaningless fields are errors, not ignored.
 - A `builtin` source's `id`, not the tool's block label, is what a platform resolves. The label stays a kastor address with no vendor meaning.
 - A `runtime` stub is **generated once and then belongs to the user**: its body is user code, so `kastor build` writes the file only while it is still absent or byte-identical to the stub the last build wrote there, and never writes it again once the file has been edited. A spec change that a user's implementation cannot be merged into still has to reach them, so the build writes the new stub beside their file as a `<name>.kastor-new` sidecar and reports the pair; a stub whose tool leaves the spec entirely is kept, not deleted, and reported the same way. Each is reported once — the sidecar on disk is the durable message. Reverting a file to its current stub hands it back to kastor and clears the sidecar. Ownership is recorded in the output directory's `.kastorbuild` marker; a directory that has no such record is treated as the user's, since assuming otherwise is the only way to lose their work.
-- For `mcp` sources the `uri` pins **identity only**: `mcp://<server>/<tool>` names the server and the tool on it — nothing more. Transport and connection details (command, endpoint, headers) are deployment configuration, not spec: generated projects read them at runtime from `mcp_servers.json` (langchain-mcp-adapters connection format), overridable via the `KASTOR_MCP_CONFIG` env var.
+- For `mcp` sources the `uri` names a **declared server and a tool on it**: `mcp://<server>/<tool>`, where `<server>` must match an `mcp_server` block in the module (§3.6). An unknown server is a compile error naming the file, the tool's block address, and the servers the module declares. Like `target.<name>` the reference is resolved and validated but creates no graph edge (§4) — servers are not nodes. The `<tool>` segment is the server's own name for the tool and is not checkable without contacting the server, so a mismatch surfaces at run time, not at `validate`.
+- **The langgraph target generates `mcp_servers.json`** from the module's `mcp_server` blocks — a generated artifact like every other file it writes: deterministic, marked do-not-edit, never hand-maintained. It holds connection config only; a credential value never appears in it, and neither does an `auth.ref`. Auth is injected by the generated bridge, which reads the environment in the user's own process at call time.
+- `KASTOR_MCP_CONFIG` survives as a **local override**: pointing it at a file replaces the generated one wholesale for that run. It is a development escape hatch — for aiming a run at a local server instance — not how connection details are meant to arrive. It carries no validation: a server the override omits or renames fails at the call, not at build. It exists only on the codegen path, where there is no state file and no plan for a bad override to corrupt.
 - Param and returns types are bare keywords, not strings: `type = string`, never `type = "string"`. Closed enum in v0: `string | number | bool` (compound types deferred to v1).
 - `default` must be a literal whose type matches the declared `type`; a mismatch or an explicit `default = null` is a compile error. A param with a `default` is optional at call time; there is no separate `optional` attribute on tool params.
 - `description` is optional on both the tool and its params at parse time (targets may enforce more).
@@ -280,12 +282,111 @@ target "claude_agents" {
 - Fields that are meaningless for a target's type are errors, not ignored (configs rot through silent acceptance).
 - **A platform target's label selects its provider implementation**, exactly as a codegen target's label selects its generator: `target "claude_agents"` binds to the Claude Managed Agents reconciler, `target "memory"` to the built-in in-memory platform. A label with no registered provider is an error naming the available providers. (A separate `provider` attribute is deliberately deferred until something forces it — e.g. two targets on the same platform kind in one module.) A target's label is also how a tool's `source` block names it (§3.3).
 - The `memory` platform is built in: an **ephemeral in-memory store** so plan/apply can be demonstrated and exercised — examples, onboarding, CI — with no credentials and no network. `auth` on it is an error (meaningless fields, again). Its remote objects die with the process, so a later invocation's plan truthfully reports previously applied resources as remote-missing drift.
+- A `claude_agents` target may declare `vault_id` — the id of the Anthropic vault (`vlt_…`) holding the credentials its MCP servers reference. It is **required** when any `mcp_server` bound on this target carries a `connection://` auth ref (§3.6), and an error on every other target, `memory` and codegen targets alike (meaningless fields, again). It names a location, not a secret: the vault's contents are created and rotated outside kastor, and kastor only reads enough to verify a reference resolves.
+
+### 3.6 `mcp_server` (project file)
+
+An MCP server the module's tools bind to. Declaring the server is what makes
+`mcp://<server>/<tool>` resolvable (§3.3).
+
+```hcl
+# Remote server; the target platform holds the credential
+mcp_server "hubspot" {
+  url = "https://mcp.hubspot.com"
+  auth {
+    ref = "connection://cred_011CZkZDLs7fYzm1hXNPeRjv"
+  }
+}
+
+# Remote server; the credential is in the environment
+mcp_server "airtable" {
+  url = "https://mcp.airtable.com/mcp"
+  auth {
+    ref = "env://AIRTABLE_TOKEN"
+  }
+}
+
+# Local server, spawned by the generated project
+mcp_server "fetch" {
+  transport = "stdio"
+  command   = "uvx"
+  args      = ["mcp-server-fetch"]
+}
+```
+
+**Rules:**
+- `transport` is a closed enum — `http` | `stdio` — defaulting to `http`. Unknown values are compile errors.
+- `http` requires `url` and allows `auth`. `stdio` requires `command`, allows `args` (list of string, default `[]`), and allows no `auth`: a spawned local process inherits the environment that spawned it. Fields meaningless for a transport are errors, not ignored (§3.5's stance).
+- Project files carry no expressions (§3.1), so `url`, `command`, and `args` entries are literals.
+- Duplicate names within a file are a parse error; module-wide duplicates are owned by module loading, like every other block.
+- A declared server no tool references is not an error, the same as an unreferenced `model`. A platform is sent only the servers an agent's tools actually bind.
+
+**Transport support is per target**, mirroring §3.1 and §3.3:
+
+| transport | `langgraph` | `eve` | `claude_agents` |
+|-----------|-------------|-------|-----------------|
+| `http` | yes | yes | yes |
+| `stdio` | yes — spawned by the generated project | error — the connection is an HTTP client; a stdio-only server needs an HTTP bridge in front of it | error — the platform dials a URL |
+
+**Credential references.** `auth.ref` is a URI naming *where a credential lives*.
+The scheme set is closed in v0:
+
+| scheme | Meaning | `langgraph` | `eve` | `claude_agents` |
+|--------|---------|-------------|-------|-----------------|
+| `env://NAME` | The value of environment variable `NAME`, read by whatever dials the server | yes — the generated bridge sends `Authorization: Bearer` from `NAME` at call time | yes — the same, from the connection's headers callback | error — the platform's agent object accepts no credential; use `connection://` |
+| `connection://<credential_id>` | A credential the target platform already holds, authenticated out of band | error — no platform holds connections on the codegen path | error | yes — kastor sends the server's name and URL only, and verifies the credential at plan |
+
+- **Kastor is never the credential holder.** It implements no OAuth flow, stores no token, and refreshes nothing. Brokering a token exchange would require a durable secret store, and the only one kastor has is a plaintext state file (§5.1); it would also make `kastor plan`, defined as a pure read (§5.2), an operation that must refresh tokens. Obtaining and refreshing a credential belongs to the environment (`env://`) or to the platform (`connection://`). This is a permanent non-goal, not a v0 deferral.
+- **In v0 kastor never reads a credential value.** Each supported (scheme, target) pair is resolve-free: on the codegen path the generated project reads `env://` itself at call time; on the platform path `connection://` is matched by the platform against its own store. The rejected pairs are exactly the ones that would force kastor to read a secret and transmit it.
+- **State records the ref, never the resolved value** (§5.1). Changing `env://A` to `env://B` is a visible diff; rotating the secret behind `env://A` is invisible to kastor — correct, because kastor does not manage the secret.
+- An unknown scheme is a compile error listing the known ones, so new resolvers are additive (§7).
+- `auth` is optional. A server without it is unauthenticated on every target.
+- An `auth` block may declare `targets` — a list of `target.<name>` references — exactly as a tool's `source` block does (§3.3). A block without `targets` is the server's default. Two `auth` blocks naming the same target is an error, as is more than one default. A server with **no** `auth` block at all is unauthenticated everywhere, which is the normal case for a public or local server; but once a server declares any `auth` block, every target it is bound on must have a binding — otherwise a server picked up authentication on one path and silently lost it on another. All three are reported by `kastor validate`, naming the server, the target, and the tools bound to it.
+- Per-target `auth` is not an optimization. `env://` is codegen-only and `connection://` is platform-only by construction, so a module targeting both paths — the §8 milestone-4 shape — cannot express an authenticated server without it.
+
+```hcl
+mcp_server "hubspot" {
+  url = "https://mcp.hubspot.com"
+
+  auth {
+    ref     = "connection://cred_011CZkZDLs7fYzm1hXNPeRjv"
+    targets = [target.claude_agents]
+  }
+
+  auth {
+    ref     = "env://HUBSPOT_TOKEN"
+    targets = [target.langgraph, target.eve]
+  }
+}
+```
+
+**On `claude_agents`, `connection://` is verified at plan.** The ref names a
+credential **id** in the vault the target declares (`vault_id`, §3.5) — not a
+display name, which the platform allows to be absent and to repeat. `kastor plan`
+fetches it and fails if it does not exist, if it is archived, or if the
+credential's own MCP server URL does not equal this block's `url`. So a typo'd,
+archived, or misdirected credential is a plan error rather than a failure at the
+agent's first tool call. Kastor still sends only the server's name and URL: the
+credential stays on the platform and is never read.
+
+**Where connection config lives.** Earlier drafts kept MCP transport entirely out
+of the spec: connection details were deployment configuration. That holds on the
+codegen path, where kastor's output is a project someone deploys into an
+environment with its own config layer. It does not hold on the platform path,
+where `kastor apply` *is* the deployment and a server's address has nowhere to
+come from but the spec. Reading it from the environment instead made a target's
+desired config depend on the operator's shell, wrote an environment-derived value
+into the state file, and left drift on that attribute comparing one shell against
+another. The line now sits here: a server's **identity, address, and the location
+of its credential** are spec; a credential's **value** never is. On the codegen
+path only, the generated runtime config may still be overridden locally (§3.3,
+`KASTOR_MCP_CONFIG`).
  
 ---
  
 ## 4. Dependency & Reference Semantics
  
-- **References create the DAG.** `agent.forecast.output.summary` makes `weather` depend on `forecast`. Same rule for `model.*`, `tool.*`, `prompt.*`. A `target.<name>` reference (`source.targets`, §3.3) is the one exception: it is resolved and validated like any reference but creates no edge, because targets are not nodes in the agent graph.
+- **References create the DAG.** `agent.forecast.output.summary` makes `weather` depend on `forecast`. Same rule for `model.*`, `tool.*`, `prompt.*`. Two references are exceptions — `target.<name>` (`source.targets` and `auth.targets`, §3.3 and §3.6) and the server segment of an `mcp://` uri (§3.6): both are resolved and validated like any other reference but create no edge, because neither targets nor MCP servers are nodes in the agent graph.
 - **References order and validate; v0 codegen does not move data.** A cross-agent reference is checked at compile time (the output must exist) and orders the DAG, but generated code exposes the referencing input as an ordinary caller-supplied parameter — the caller runs the upstream agent and passes the value. Wiring actual data flow is orchestration, deferred to v1 (§7).
 - `depends_on` is the explicit escape hatch for ordering without data flow (Terraform-style).
 - Cycles are a compile error.
@@ -332,6 +433,7 @@ Exit codes (all commands): 0 clean, 1 validation/codegen/plan/apply errors, 2 us
 - `version` is the state format version. Unknown versions are rejected, never guessed at (same stance as language versioning, §9). `serial` increases by one on every write, ordering snapshots.
 - The **unit of remote management is the agent**: each `agent` block is one resource; its model, prompt, and tools are folded into the resource's config (the "agent closure"). Standalone remote tool/prompt objects are deferred.
 - `config` is the **full last-applied config** (canonical JSON, not a hash) — drift reports can then name the attributes that changed without refetching anything.
+- **Credential references are stored; credential values never are.** A resource's `config` records an `auth.ref` (§3.6) verbatim — `env://AIRTABLE_TOKEN`, not the token behind it. Nothing in `kastor.state.json` is a secret, and no plan rendering of it can leak one. This is what keeps the state file safe to hand to a colleague while debugging, and it holds for every resolver added later.
 - `dependencies` records the resource's managed (agent) dependencies so a resource that has been removed from the spec can still be destroyed in reverse dependency order — the module graph no longer knows it.
 - Serialization is deterministic: stable key order, byte-identical output for equal state. Writes are atomic (temp file + rename) and happen **after every applied operation**, not once at the end — an interrupted apply loses nothing, and a re-run plans exactly the remainder.
 - Like Terraform state, the file is environment-specific and is not meant to be committed.
@@ -392,7 +494,7 @@ Providers implement a common interface (`Read/Create/Update/Delete/Diff`) — la
 - `Delete(id)` is idempotent: deleting an already-missing remote object succeeds, so re-runs after partial failures converge.
 - `Diff(desired, remote)` is the comparison authority — only the provider knows how the neutral config maps onto its platform's attributes. Empty result = in sync. The engine also diffs the last-applied config against the remote for drift detection.
 - `Diff` must accept a **nil remote**, meaning the object does not exist on the platform. It then validates the desired config exactly as it would against an existing object — returning an error is how a provider rejects a spec it cannot map — and otherwise returns one attribute diff per attribute a `Create` would set. The engine calls `Diff` this way for every planned create, so a module that cannot apply fails at plan.
-- `Diff` must be pure and deterministic; `Read` must not mutate. `kastor plan` issues only these two.
+- `Diff` must not mutate and must return the same result for the same platform state; `Read` must not mutate either. `kastor plan` issues only these two. `Diff` may issue **additional reads** to validate a desired config against platform-side objects that config references — verifying a `connection://` credential against the target's vault (§3.6) is the first — because rejecting an unsatisfiable spec at plan is precisely what `Diff` against a nil remote exists to do. Such a read must be side-effect free and must report a missing referenced object as a plan error, never as drift.
 
 The plan/apply engine is target-agnostic and consumes exactly what `kastor validate` assembles (loaded module, dependency graph, topological order) plus the state file — the same shape as the codegen engine's `Generate(job)` contract.
  
@@ -404,7 +506,8 @@ The plan/apply engine is target-agnostic and consumes exactly what `kastor valid
 - **Guardrails** blocks (input/output filters, budgets, rate limits)
 - Multi-agent orchestration graphs (routing, handoffs) beyond simple references
 - Module registry / package management for sharing `.agent`/`.tool` files
-- Secrets management beyond env vars
+- **More credential resolvers** — `vault://`, `op://`, `aws-sm://` alongside v0's `env://` and `connection://` (§3.6). Purely additive: the scheme set is closed and rejects unknown schemes, so each new resolver is an addition within the language version. Each also brings a dependency and an auth story of its own, and would be the first scheme requiring kastor to *read* a secret — so each needs its own design pass. Kastor holding or brokering a credential is **not** on this list; it is a permanent non-goal (§3.6).
+- **Per-environment variables** — staging vs. production values for a server's `url` and other spec attributes (the tfvars-shaped problem)
 - Remote state backends
 ---
  
