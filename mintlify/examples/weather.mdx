@@ -223,15 +223,22 @@ go build -o kastor ./cmd/kastor
 
 To run the generated LangGraph project, set `OPENAI_API_KEY`.
 
-For the MCP search tool, provide `mcp_servers.json` in the generated project directory or set `KASTOR_MCP_CONFIG` to another path.
+The MCP search tool needs `TAVILY_API_KEY`. The server itself is declared in `kastor.hcl`:
 
-```json
-{
-  "search-server": {
-    "transport": "streamable_http",
-    "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=YOUR-TAVILY-KEY"
+```hcl
+mcp_server "search-server" {
+  url = "https://mcp.tavily.com/mcp"
+
+  auth {
+    ref = "env://TAVILY_API_KEY"
   }
 }
+```
+
+`kastor build` writes its connection config to `gen/langgraph/mcp_servers.json`, so there is nothing to create by hand. The `env://` ref names *where* the credential lives — the generated bridge reads that variable in your own process at call time, so no key is written into the generated project or into the config file.
+
+```bash
+export TAVILY_API_KEY=YOUR-TAVILY-KEY
 ```
 
 Keep real API keys out of the repository.

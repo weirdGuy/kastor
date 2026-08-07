@@ -6,11 +6,10 @@ with zero edits — make it yours from there.
 
 | File | Purpose |
 |------|---------|
-| `kastor.hcl` | the model and the LangGraph codegen target |
+| `kastor.hcl` | the model, the LangGraph codegen target, and the `fetch` MCP server |
 | `researcher.agent` | the agent: typed input (`question`), output (`answer`), tool list |
 | `fetch_url.tool` | tool interface backed by the MCP server tool `mcp://fetch/fetch` |
 | `researcher_system.prompt` | the system prompt; requires exactly the agent's inputs |
-| `mcp_servers.json` | runtime connection details for the `fetch` MCP server |
 
 ## Validate and build
 
@@ -26,9 +25,14 @@ and rebuild.
 ## Run the generated agent
 
 Requires Python 3.11+, [`uvx`](https://docs.astral.sh/uv/) (runs the
-reference MCP fetch server declared in `mcp_servers.json`), and an OpenAI
-API key (`model "fast"` is `openai` / `gpt-4o-mini` — swap the provider in
-`kastor.hcl` and rebuild to use another vendor).
+reference MCP fetch server the `mcp_server "fetch"` block declares), and an
+OpenAI API key (`model "fast"` is `openai` / `gpt-4o-mini` — swap the
+provider in `kastor.hcl` and rebuild to use another vendor).
+
+The build writes the server's connection config to
+`gen/langgraph/mcp_servers.json`, so there is nothing to configure by hand:
+the `fetch` server needs no credential, since a stdio server inherits the
+environment that spawns it.
 
 ```sh
 cd gen/langgraph
@@ -37,7 +41,6 @@ python -m venv .venv
 pip install -r requirements.txt
 
 export OPENAI_API_KEY=sk-...
-export KASTOR_MCP_CONFIG=../../mcp_servers.json
 python main.py researcher --inputs '{"question": "What is HCL and who maintains it?"}'
 ```
 

@@ -196,10 +196,23 @@ model "haiku" {
 }
 
 target "claude_agents" {
-  type = "platform"
+  type     = "platform"
+  vault_id = "vlt_011CZkZDLs7fYzm1hXNPeRjv"
 
   auth {
     api_key_env = "ANTHROPIC_API_KEY"
+  }
+}
+
+# The MCP server tool.tavily_search binds to. Declaring it is what makes
+# mcp://search-server/<tool> resolvable. `ref` names *where* the credential
+# lives — never the credential: on this target it is one Anthropic already
+# holds, in the vault the target names.
+mcp_server "search-server" {
+  url = "https://mcp.tavily.com/mcp"
+
+  auth {
+    ref = "connection://cred_011CZkZDLs7fYzm1hXNPeRjv"
   }
 }
 ```
@@ -257,23 +270,28 @@ requires = []
 You are a research assistant. Answer concisely and cite your sources.
 ```
 
-Two kinds of environment variable:
+One environment variable — the platform credential:
 
 ```sh
 export ANTHROPIC_API_KEY=sk-ant-YOUR-KEY
-export KASTOR_MCP_SEARCH_SERVER_URL="https://mcp.tavily.com/mcp/?tavilyApiKey=tvly-YOUR-KEY"
 ```
 
 `ANTHROPIC_API_KEY` is the default credential; the `auth` block above only names
 it explicitly. Any other variable works — `api_key_env = "ANTHROPIC_API_KEY_PROD"`
 — and the `auth` block may be omitted entirely.
 
-MCP endpoints stay out of the spec, exactly as they do for codegen: the `mcp://`
-URI pins server and tool identity only. For each server named in a URI, kastor
-reads `KASTOR_MCP_<SERVER>_URL` — the server name uppercased, with every
-character outside `A-Z0-9` replaced by `_`. So `mcp://search-server/tavily_search`
-needs `KASTOR_MCP_SEARCH_SERVER_URL`. A missing one fails the plan naming the
-variable it wanted.
+The MCP server needs nothing further in your shell. Its **address** is spec — the
+`mcp_server` block — and its **credential** is one Anthropic already holds, named
+by a `connection://` ref and resolved by the platform, not by kastor. Kastor is
+never the credential holder: it stores no token, refreshes nothing, and sends the
+platform the server's name and URL only. State records the reference, never the
+value, so rotating the secret behind it is invisible to kastor — correct, because
+kastor does not manage the secret.
+
+`plan` and `apply` never contact the vault. Whether a credential actually
+resolves is a readiness question, not a pending-change one, so it belongs to
+[`kastor doctor`](#readiness-kastor-doctor) — which reports a typo'd, archived, or
+misdirected credential by name.
 
 Plan, then apply:
 
@@ -396,27 +414,29 @@ The example's `web_search` tool is pinned to an MCP server and tool by its spec 
 mcp://search-server/tavily_search
 ```
 
-How to reach that server is deployment configuration, not spec. Create `mcp_servers.json` in the generated project's working directory, or point the `KASTOR_MCP_CONFIG` environment variable at a file elsewhere.
+The server it names is declared in `examples/weather/kastor.hcl`, which is what makes that URI resolvable:
 
-For Tavily's hosted server:
+```hcl
+mcp_server "search-server" {
+  url = "https://mcp.tavily.com/mcp"
 
-```json
-{
-  "search-server": {
-    "transport": "streamable_http",
-    "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=tvly-YOUR-KEY"
+  auth {
+    ref = "env://TAVILY_API_KEY"
   }
 }
 ```
 
-The URL embeds your API key, which is why `mcp_servers.json` is gitignored. Treat it as a secret and never commit it.
+`kastor build` turns that block into `gen/langgraph/mcp_servers.json` — generated output like everything else in the directory, rewritten by the next build. There is nothing to write by hand. (`KASTOR_MCP_CONFIG` still overrides it wholesale for one run, a development escape hatch for aiming at a local server instance.)
+
+The credential is **referenced, never held**: `env://TAVILY_API_KEY` names a variable, and the generated bridge reads it in your own process at call time. No token is written into the generated project, and none appears in `mcp_servers.json`.
 
 The spec URI's last path segment, `tavily_search`, must name a tool the server actually advertises. If it does not, calls fail with `does not expose tool`.
 
-Export the model credential. The example's `model "fast"` block uses provider `openai`:
+Export the model credential and the server's. The example's `model "fast"` block uses provider `openai`:
 
 ```sh
 export OPENAI_API_KEY=sk-...
+export TAVILY_API_KEY=tvly-...
 ```
 
 Run the agent:

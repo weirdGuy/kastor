@@ -218,6 +218,11 @@ func TestGenerateErrors(t *testing.T) {
 			dir:      "bad_provider",
 			wantErrs: []string{"model.local", `"ollama"`, "supported: anthropic, google, openai"},
 		},
+		{
+			name:     "stdio transport has no eve connection",
+			dir:      "stdio_server",
+			wantErrs: []string{"mcp_server.fetch", `transport "stdio"`, "HTTP client", "HTTP bridge"},
+		},
 	}
 
 	for _, tc := range tests {

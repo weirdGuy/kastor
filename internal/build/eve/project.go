@@ -124,12 +124,22 @@ func (pb *projectBuilder) writeServers(b *strings.Builder) {
 	if len(pb.servers) == 0 {
 		return
 	}
-	b.WriteString("\n## MCP servers\n\nThe spec pins tool identity only (`mcp://<server>/<tool>`); each connection\nfile allow-lists exactly the pinned tools and reads its endpoint URL — a\nStreamable HTTP or SSE endpoint — from the environment. A stdio-only local\nserver needs an HTTP bridge in front of it.\n\n")
+	b.WriteString("\n## MCP servers\n\nEach connection file allow-lists exactly the tools the spec pinned\n(`mcp://<server>/<tool>`) and dials the url its `mcp_server` block declares.\nA stdio-only local server needs an HTTP bridge in front of it.\n\n")
+	var authenticated []*mcpServer
 	for _, name := range sortedKeys(pb.servers) {
 		s := pb.servers[name]
-		fmt.Fprintf(b, "- server `%s`: set `%s` (tools: %s; from %s)\n", s.Name, envName(s.Name), backtickList(s.Allow), boundBy(s))
+		fmt.Fprintf(b, "- server `%s` at `%s` (tools: %s; from %s)\n", s.Name, s.Decl.URL, backtickList(s.Allow), boundBy(s))
+		if s.AuthEnv != "" {
+			authenticated = append(authenticated, s)
+		}
 	}
-	b.WriteString("\nHosted endpoints often embed credentials in the URL, so keep these variables\nin deployment config (e.g. `.env.local`), never in version control.\n")
+	if len(authenticated) == 0 {
+		return
+	}
+	b.WriteString("\nCredentials are referenced, never held: kastor writes no token into this\nproject and stores none. Set these in the environment the agent runs in\n(e.g. `.env.local`), never in version control:\n\n")
+	for _, s := range authenticated {
+		fmt.Fprintf(b, "- server `%s`: set `%s` (auth ref `env://%s`)\n", s.Name, s.AuthEnv, s.AuthEnv)
+	}
 }
 
 func (pb *projectBuilder) writeRuntime(b *strings.Builder) {

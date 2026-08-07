@@ -304,7 +304,7 @@ target "claude_agents" {
 }
 ```
 
-Every MCP server named by a tool's `mcp://<server>/<tool>` URI needs an endpoint URL in the environment, under `KASTOR_MCP_<SERVER>_URL` — the server name uppercased, with every character outside `A-Z0-9` replaced by `_`. `mcp://search-server/tavily_search` reads `KASTOR_MCP_SEARCH_SERVER_URL`.
+Every MCP server named by a tool's `mcp://<server>/<tool>` URI must be declared as an `mcp_server` block in the project file; an undeclared one is a compile error naming the fix. The block owns the server's address, so nothing about it is read from the environment. On this target its credential must be a `connection://` ref — one Anthropic already holds — and the target must declare the `vault_id` it lives in. Kastor sends the platform the server's name and URL only, and never reads the credential; `kastor doctor` verifies that the reference resolves.
 
 Kastor stamps `metadata.kastor_managed = "<block address>"` on every agent it creates and refuses to compare a remote agent that does not carry the marker, so an agent created by hand in the Console cannot be overwritten by an apply.
 

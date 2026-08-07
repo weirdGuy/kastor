@@ -16,13 +16,14 @@ examples/**/gen/
 examples/**/kastor.state.json
 examples/**/.kastor.state.lock
 
-# MCP server connection config: can carry API keys in URLs (hosted
-# endpoints like Tavily embed the key as a query param). Must never be
-# committable by accident. The `kastor init` scaffold's copy is the one
-# exception: it holds no credentials (local stdio server) and must be
-# tracked — go:embed bakes it into the binary.
+# MCP server connection config. `kastor build` generates it from the
+# module's mcp_server blocks, so a copy in a source tree is build output —
+# and a hosted endpoint's url can carry an API key as a query param, which
+# must never become committable by accident. Codegen goldens are the one
+# exception: they are the assertion about what the generator emits, so they
+# have to be tracked.
 mcp_servers.json
-!cmd/kastor/scaffold/**/mcp_servers.json
+!internal/build/**/testdata/**/mcp_servers.json
 
 # Python artifacts from running generated projects
 **/__pycache__/

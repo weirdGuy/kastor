@@ -1,0 +1,12 @@
+agent "sales" {
+  model = model.fast
+  tools = [tool.crm_search]
+
+  input "account" {
+    type = string
+  }
+
+  output "summary" {
+    type = string
+  }
+}

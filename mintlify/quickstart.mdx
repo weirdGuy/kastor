@@ -37,7 +37,7 @@ Success! Module is valid: 1 agent, 1 tool, 1 prompt, 1 model, 1 target.
 Built target langgraph: 11 files → demo/gen/langgraph
 ```
 
-The scaffolded agent answers a question by fetching web pages through the reference MCP fetch server, run locally via [`uvx`](https://docs.astral.sh/uv/) — no tool API key needed. To run the generated project you need Python 3.11\+, `uvx`, and an OpenAI API key; the scaffold's `README.md` walks through it, including pointing `KASTOR_MCP_CONFIG` at the module's `mcp_servers.json`.
+The scaffolded agent answers a question by fetching web pages through the reference MCP fetch server, run locally via [`uvx`](https://docs.astral.sh/uv/) — no tool API key needed. To run the generated project you need Python 3.11\+, `uvx`, and an OpenAI API key; the scaffold's `README.md` walks through it. The server is declared as an `mcp_server "fetch"` block in `kastor.hcl`, and the build writes its connection config to `gen/langgraph/mcp_servers.json`, so there is nothing to configure by hand.
 
 `init` refuses a directory that already contains visible files unless you pass `--force`, and `--target` selects the pre-configured codegen target (`langgraph` today). See the [CLI reference](/reference/cli#kastor-init) for details.
 
@@ -92,18 +92,25 @@ export OPENAI_API_KEY=YOUR-OPENAI-API-KEY
 python3 main.py weather --inputs '{"location": "Lisbon", "date": "tomorrow"}'
 ```
 
-The weather tool is declared as an MCP tool. The generated project reads MCP server connection details from `mcp_servers.json` in the working directory or from the path in `KASTOR_MCP_CONFIG`.
+The weather tool is declared as an MCP tool. The server it binds to is declared in `kastor.hcl`, which is what makes its `mcp://search-server/tavily_search` URI resolvable:
 
-Use a placeholder-shaped config like this and keep the real file out of version control:
+```hcl
+mcp_server "search-server" {
+  url = "https://mcp.tavily.com/mcp"
 
-```json
-{
-  "search-server": {
-    "transport": "streamable_http",
-    "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=YOUR-TAVILY-KEY"
+  auth {
+    ref = "env://TAVILY_API_KEY"
   }
 }
 ```
+
+`kastor build` turns that into `gen/langgraph/mcp_servers.json` — generated output, rewritten by the next build. The credential is referenced, never held: `env://TAVILY_API_KEY` names a variable the generated bridge reads in your own process at call time, so no token is written into the project or into the config file.
+
+```bash
+export TAVILY_API_KEY=YOUR-TAVILY-KEY
+```
+
+`KASTOR_MCP_CONFIG` still overrides the generated file wholesale for one run — a development escape hatch for aiming at a local server instance, not how connection details are meant to arrive.
 
 ## Plan and apply
 
@@ -160,10 +167,19 @@ model "haiku" {
 }
 
 target "claude_agents" {
-  type = "platform"
+  type     = "platform"
+  vault_id = "vlt_011CZkZDLs7fYzm1hXNPeRjv"
 
   auth {
     api_key_env = "ANTHROPIC_API_KEY"
+  }
+}
+
+mcp_server "search-server" {
+  url = "https://mcp.tavily.com/mcp"
+
+  auth {
+    ref = "connection://cred_011CZkZDLs7fYzm1hXNPeRjv"
   }
 }
 ```
@@ -224,12 +240,13 @@ The model must use `provider = "anthropic"`. `tool.web_search` is `kind = "built
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-YOUR-KEY
-export KASTOR_MCP_SEARCH_SERVER_URL="https://mcp.tavily.com/mcp/?tavilyApiKey=tvly-YOUR-KEY"
 ```
 
 `ANTHROPIC_API_KEY` is the default credential. The `auth` block above only names it explicitly; you can point `api_key_env` at any other variable, or omit `auth` entirely.
 
-MCP endpoints are deployment configuration, never spec — the `mcp://` URI pins server and tool identity only. For each server a URI names, kastor reads `KASTOR_MCP_<SERVER>_URL`: the server name uppercased, with every character outside `A-Z0-9` replaced by `_`. So `mcp://search-server/tavily_search` needs `KASTOR_MCP_SEARCH_SERVER_URL`. A missing one fails the plan and names the variable it wanted.
+The MCP server needs nothing further in your shell. Its address is spec — the `mcp_server` block — and its credential is one Anthropic already holds, named by a `connection://` ref pointing into the vault the target declares. Kastor sends the platform the server's name and URL only, stores no token, and records the reference in state rather than the value.
+
+`plan` and `apply` never contact the vault. Whether the credential actually resolves is a readiness question, so it belongs to `kastor doctor`, which names a typo'd, archived, or misdirected credential instead of leaving it to the agent's first tool call.
 
 ### Plan and apply
 
