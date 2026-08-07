@@ -279,7 +279,7 @@ distinction is that every future capability has to be sorted into one bucket;
 the test above is how, and the answer belongs in the target's capability
 descriptor, not in a bespoke rule per feature.
 
-Validate checks only what is knowable from the spec. Facts that depend on the environment — a missing MCP endpoint variable, rejected credentials — remain the provider's to report through `Diff` (§6), so `kastor validate` still needs no credentials and no network.
+Validate checks only what is knowable from the spec. Facts that depend on the environment or on platform-side objects — an unset credential variable, a revoked connection, a tool the remote agent is not permitted to call — belong to `kastor doctor` (§5.3), so `kastor validate` still needs no credentials and no network, and neither does `kastor plan`.
 
 **Codegen mapping (LangGraph target).** Applies to the source **selected for that target**:
 
@@ -358,7 +358,7 @@ target "claude_agents" {
 - Fields that are meaningless for a target's type are errors, not ignored (configs rot through silent acceptance).
 - **A platform target's label selects its provider implementation**, exactly as a codegen target's label selects its generator: `target "claude_agents"` binds to the Claude Managed Agents reconciler, `target "memory"` to the built-in in-memory platform. A label with no registered provider is an error naming the available providers. (A separate `provider` attribute is deliberately deferred until something forces it — e.g. two targets on the same platform kind in one module.) A target's label is also how a tool's `source` block names it (§3.3).
 - The `memory` platform is built in: an **ephemeral in-memory store** so plan/apply can be demonstrated and exercised — examples, onboarding, CI — with no credentials and no network. `auth` on it is an error (meaningless fields, again). Its remote objects die with the process, so a later invocation's plan truthfully reports previously applied resources as remote-missing drift.
-- A `claude_agents` target may declare `vault_id` — the id of the Anthropic vault (`vlt_…`) holding the credentials its MCP servers reference. It is **required** when any `mcp_server` bound on this target carries a `connection://` auth ref (§3.6), and an error on every other target, `memory` and codegen targets alike (meaningless fields, again). It names a location, not a secret: the vault's contents are created and rotated outside kastor, and kastor only reads enough to verify a reference resolves.
+- A `claude_agents` target may declare `vault_id` — the id of the Anthropic vault (`vlt_…`) holding the credentials its MCP servers reference. It is **required** when any `mcp_server` bound on this target carries a `connection://` auth ref (§3.6), and an error on every other target, `memory` and codegen targets alike (meaningless fields, again). It names a location, not a secret: the vault's contents are created and rotated outside kastor, and the only command that reads it is `kastor doctor` (§5.3), which reads enough to verify a reference resolves and never the credential's value. `plan` and `apply` never contact it.
 
 ### 3.6 `mcp_server` (project file)
 
@@ -410,7 +410,7 @@ The scheme set is closed in v0:
 | scheme | Meaning | `langgraph` | `eve` | `claude_agents` |
 |--------|---------|-------------|-------|-----------------|
 | `env://NAME` | The value of environment variable `NAME`, read by whatever dials the server | yes — the generated bridge sends `Authorization: Bearer` from `NAME` at call time | yes — the same, from the connection's headers callback | error — the platform's agent object accepts no credential; use `connection://` |
-| `connection://<credential_id>` | A credential the target platform already holds, authenticated out of band | error — no platform holds connections on the codegen path | error | yes — kastor sends the server's name and URL only, and verifies the credential at plan |
+| `connection://<credential_id>` | A credential the target platform already holds, authenticated out of band | error — no platform holds connections on the codegen path | error | yes — kastor sends the server's name and URL only; `kastor doctor` verifies the credential (§5.3) |
 
 - **Kastor is never the credential holder.** It implements no OAuth flow, stores no token, and refreshes nothing. Brokering a token exchange would require a durable secret store, and the only one kastor has is a plaintext state file (§5.1); it would also make `kastor plan`, defined as a pure read (§5.2), an operation that must refresh tokens. Obtaining and refreshing a credential belongs to the environment (`env://`) or to the platform (`connection://`). This is a permanent non-goal, not a v0 deferral.
 - **In v0 kastor never reads a credential value.** Each supported (scheme, target) pair is resolve-free: on the codegen path the generated project reads `env://` itself at call time; on the platform path `connection://` is matched by the platform against its own store. The rejected pairs are exactly the ones that would force kastor to read a secret and transmit it.
@@ -436,14 +436,23 @@ mcp_server "hubspot" {
 }
 ```
 
-**On `claude_agents`, `connection://` is verified at plan.** The ref names a
-credential **id** in the vault the target declares (`vault_id`, §3.5) — not a
-display name, which the platform allows to be absent and to repeat. `kastor plan`
-fetches it and fails if it does not exist, if it is archived, or if the
-credential's own MCP server URL does not equal this block's `url`. So a typo'd,
-archived, or misdirected credential is a plan error rather than a failure at the
-agent's first tool call. Kastor still sends only the server's name and URL: the
-credential stays on the platform and is never read.
+**On `claude_agents`, `connection://` is verified by `kastor doctor`** (§5.3),
+not by `plan`. The ref names a credential **id** in the vault the target declares
+(`vault_id`, §3.5) — not a display name, which the platform allows to be absent
+and to repeat. `doctor` fetches it and reports a finding if it does not exist, if
+it is archived, or if the credential's own MCP server URL does not equal this
+block's `url`. So a typo'd, archived, or misdirected credential is named by a
+readiness check rather than discovered at the agent's first tool call. Kastor
+still sends only the server's name and URL: the credential stays on the platform
+and is never read.
+
+The check lives in `doctor` and not in `plan` for two reasons. `plan` is a pure
+read of spec/state/remote whose whole output vocabulary is pending change, and a
+credential fault is not a pending change — there is no create, update, or delete
+that fixes it (§6). And the verification is inherently racy: a credential valid
+at `plan` can be revoked before `apply`, so plan-time verification buys an
+assurance it cannot deliver. `doctor` makes no such promise — it reports what was
+true when it ran.
 
 **Where connection config lives.** Earlier drafts kept MCP transport entirely out
 of the spec: connection details were deployment configuration. That holds on the
@@ -478,6 +487,7 @@ path only, the generated runtime config may still be overridden locally (§3.3,
 | `kastor build [-target X]` | Codegen for framework targets |
 | `kastor plan` | Diff spec vs. state file vs. remote platform |
 | `kastor apply` | Reconcile platform targets, update state |
+| `kastor doctor` | Readiness check: can what is deployed actually run (§5.3) |
 | `kastor destroy` | Remove managed remote agents |
 | `kastor fmt` | Canonical formatting |
  
@@ -539,6 +549,64 @@ Per resource, in the module's topological order (deletes first, in reverse depen
 `kastor apply` executes the plan in order and stops at the first failure; everything applied up to that point is already saved in state, and the error states what failed, what had been applied, and — if a resource was created remotely but saving state failed — the remote id, so nothing is orphaned silently. `kastor apply` does not prompt for confirmation in v0. `kastor destroy` deletes everything in state in reverse dependency order.
 
 Diagnostics from plan/apply are structured (severity, block address, summary, detail) so a machine-readable `--json` rendering (§9) is a renderer, not a redesign.
+
+### 5.3 Readiness (`kastor doctor`)
+
+`plan` and `apply` are about **declared configuration**: they answer "does the
+remote match the spec". They do not answer "can the thing that is deployed
+actually run". An agent whose MCP connections are unauthenticated and whose tool
+permissions deny everything matches its spec exactly — `plan` clean, no drift —
+and cannot serve a single request. Readiness is a different question and gets its
+own verb.
+
+```
+kastor doctor [--target <name>] [dir]
+```
+
+`kastor doctor` is **read-only**: it never invokes an agent, never mutates a
+remote object, and never writes the state file. For every agent the state tracks
+on the selected platform target(s) it reports:
+
+| Check | What it establishes |
+|-------|---------------------|
+| **Remote existence** | The state's id still resolves to a live object (provider `Read`) |
+| **Credential verification** | Each `connection://` ref bound on this target names a credential that exists, is not archived, and whose own MCP server URL equals the declaring `mcp_server` block's `url` (§3.6) |
+| **Environment readiness** | Which `env://` refs the module needs are currently unset |
+| **Tool permissions** | The remote grants every tool the agent's `tools` list declares, and gates exactly what `requires_approval` names (§3.2) |
+
+**Three outcomes, not two.** Every check reports `ok`, `failed`, or `unknown`,
+and the third is load-bearing: **"could not verify" is never rendered as
+"missing"**. An unreachable vault and an absent credential are different facts
+and a user acts differently on each — one is an outage to wait out or a network
+path to open, the other is a spec or platform change. Collapsing them would make
+`doctor` actively misleading in exactly the situation where a user most needs to
+trust it. `unknown` counts as a finding (the command did not establish
+readiness), and is counted separately from `failed` in the summary.
+
+**Credential ids are printed with their display name alongside** —
+`cred_011CZkZDLs7fYzm1hXNPeRjv ("HubSpot Prod")`. The id is the identifier
+because a display name is nullable and non-unique on the platform and therefore
+cannot be one (§3.6); that is a correctness constraint, not a reason for output
+to be unreadable. A credential with no display name prints as its id alone.
+
+**Environment readiness needs no platform at all.** It compares the module's
+`env://` refs against the process environment, so it answers *"what does this
+module need from my environment before it will run"* offline, with no
+credentials and no network — the same standing that `validate` has.
+
+**Output follows the plan renderer's conventions** (§5.2): one line per finding,
+structured diagnostics carrying severity, block address, summary, and detail, and
+a countable per-target summary line. The whole report — target, per-resource
+checks, diagnostics — is **one serializable tree**, so the `--json` rendering of
+§9 is a second renderer over the same data rather than a second pipeline.
+
+Exit codes follow §5: **0** ready, **1** findings, **2** usage/IO.
+
+`doctor` is deliberately not a step inside `plan` or `apply`. Its checks are racy
+by nature — a credential valid when it ran can be revoked a second later — so
+folding them into `apply` would promise an assurance neither command can keep,
+while costing `plan` its purity (§6). `doctor` promises only to report what was
+true when it ran, which is a promise it can keep.
  
 ---
  
@@ -570,7 +638,9 @@ Providers implement a common interface (`Read/Create/Update/Delete/Diff`) — la
 - `Delete(id)` is idempotent: deleting an already-missing remote object succeeds, so re-runs after partial failures converge.
 - `Diff(desired, remote)` is the comparison authority — only the provider knows how the neutral config maps onto its platform's attributes. Empty result = in sync. The engine also diffs the last-applied config against the remote for drift detection.
 - `Diff` must accept a **nil remote**, meaning the object does not exist on the platform. It then validates the desired config exactly as it would against an existing object — returning an error is how a provider rejects a spec it cannot map — and otherwise returns one attribute diff per attribute a `Create` would set. The engine calls `Diff` this way for every planned create, so a module that cannot apply fails at plan.
-- `Diff` must not mutate and must return the same result for the same platform state; `Read` must not mutate either. `kastor plan` issues only these two. `Diff` may issue **additional reads** to validate a desired config against platform-side objects that config references — verifying a `connection://` credential against the target's vault (§3.6) is the first — because rejecting an unsatisfiable spec at plan is precisely what `Diff` against a nil remote exists to do. Such a read must be side-effect free and must report a missing referenced object as a plan error, never as drift.
+- `Diff` must be pure and deterministic; `Read` must not mutate. `kastor plan` issues only these two. In particular `Diff` issues **no reads of its own**: an earlier draft let it verify a `connection://` credential against the target's vault during plan, and that is reverted. `Diff`'s entire output vocabulary is drift, the verification's own constraint was that a failure is never rendered as drift, and a check that cannot produce drift does not belong in the drift function. Keeping it there cost provider-contract purity for every future provider, offline `plan`, in-memory-provider coverage of the plan path, and would have needed a `--skip-verify` flag for network-restricted CI — needing a switch to disable a check is the tell that it sits in the wrong place. Readiness verification is `kastor doctor`'s (§5.3).
+
+**Optional capabilities.** A provider may implement interfaces beyond the five above; the engine feature-detects them and degrades to the base contract when they are absent. `Checker` (§5.3) is the first. An optional capability may relax the rules above **only where the verb invoking it has no contract to relax** — `Checker` may issue reads `Diff` may not, because `doctor` never feeds a plan and never writes state. It is not a back door into `plan`: the engine calls optional capabilities only from the verbs that declare them.
 
 The plan/apply engine is target-agnostic and consumes exactly what `kastor validate` assembles (loaded module, dependency graph, topological order) plus the state file — the same shape as the codegen engine's `Generate(job)` contract.
  
