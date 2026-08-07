@@ -218,11 +218,6 @@ func TestGenerateErrors(t *testing.T) {
 			dir:      "bad_provider",
 			wantErrs: []string{"model.local", `"ollama"`, "supported: anthropic, google, openai"},
 		},
-		{
-			name:     "malformed mcp uri",
-			dir:      "bad_mcp_uri",
-			wantErrs: []string{"tool.web_search", "mcp://<server>/<tool>"},
-		},
 	}
 
 	for _, tc := range tests {

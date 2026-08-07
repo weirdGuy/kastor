@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
@@ -22,12 +23,13 @@ import (
 // files. Block slices follow lexical file order, source order within a file,
 // so downstream output stays deterministic.
 type Module struct {
-	Root    string
-	Agents  []*schema.Agent
-	Tools   []*schema.Tool
-	Prompts []*schema.Prompt
-	Models  []*schema.Model
-	Targets []*schema.Target
+	Root       string
+	Agents     []*schema.Agent
+	Tools      []*schema.Tool
+	Prompts    []*schema.Prompt
+	Models     []*schema.Model
+	Targets    []*schema.Target
+	MCPServers []*schema.MCPServer
 
 	symbols map[string]*Symbol
 }
@@ -35,9 +37,9 @@ type Module struct {
 // Symbol is one addressable block in the module's symbol table.
 type Symbol struct {
 	Addr  string // block address, e.g. "agent.weather"
-	Kind  string // agent | tool | prompt | model | target
+	Kind  string // agent | tool | prompt | model | target | mcp_server
 	File  string // declaring file, relative to the module root
-	Block any    // *schema.Agent, *schema.Tool, *schema.Prompt, *schema.Model, or *schema.Target
+	Block any    // *schema.Agent, *schema.Tool, *schema.Prompt, *schema.Model, *schema.Target, or *schema.MCPServer
 }
 
 // Lookup resolves a block address against the module's symbol table.
@@ -67,6 +69,14 @@ func Load(root string) (*Module, error) {
 	for _, a := range mod.Agents {
 		errs = append(errs, mod.resolveAgent(a)...)
 	}
+	for _, t := range mod.Tools {
+		errs = append(errs, mod.resolveToolSource(t)...)
+	}
+	for _, s := range mod.MCPServers {
+		errs = append(errs, mod.resolveMCPServer(s)...)
+	}
+	errs = append(errs, mod.checkAuthCoverage()...)
+	errs = append(errs, mod.checkCredentialTargets()...)
 
 	if err := errors.Join(errs...); err != nil {
 		return nil, err
@@ -232,6 +242,11 @@ func (m *Module) loadFile(path, rel string) []error {
 				m.Targets = append(m.Targets, tgt)
 			}
 		}
+		for _, srv := range project.MCPServers {
+			if define("mcp_server", srv.Addr(), srv) {
+				m.MCPServers = append(m.MCPServers, srv)
+			}
+		}
 	}
 	return errs
 }
@@ -290,6 +305,188 @@ func (m *Module) resolveAgent(a *schema.Agent) []error {
 		}
 	}
 	return errs
+}
+
+// resolveToolSource checks the server segment of an mcp:// source uri against
+// the module's mcp_server blocks (SPEC.md §3.6). Like target.<name> the
+// reference is resolved and validated but creates no graph edge — servers are
+// not nodes (§4). The <tool> segment is the server's own name for the tool and
+// is not checkable without contacting the server, so it is left to run time.
+func (m *Module) resolveToolSource(t *schema.Tool) []error {
+	if t.Source == nil || t.Source.Kind != "mcp" {
+		return nil
+	}
+	file := m.symbols[t.Addr()].File
+
+	server, _, err := schema.ParseMCPURI(t.Source.URI)
+	if err != nil {
+		return []error{fmt.Errorf("%s: %s: %w", file, t.Addr(), err)}
+	}
+	addr := "mcp_server." + server
+	if sym, ok := m.symbols[addr]; ok && sym.Kind == "mcp_server" {
+		return nil
+	}
+	return []error{fmt.Errorf("%s: %s: source uri %q names undeclared MCP server %q (declared servers: %s)",
+		file, t.Addr(), t.Source.URI, server, joinOrNone(m.mcpServerNames()))}
+}
+
+// resolveMCPServer checks every target.<name> reference on a server's auth
+// blocks against the symbol table.
+func (m *Module) resolveMCPServer(s *schema.MCPServer) []error {
+	file := m.symbols[s.Addr()].File
+
+	var errs []error
+	for i, auth := range s.Auth {
+		for _, ref := range auth.Targets {
+			sym, ok := m.symbols[ref]
+			if !ok {
+				errs = append(errs, fmt.Errorf("%s: %s: auth block %d: unknown reference %s (declared targets: %s)",
+					file, s.Addr(), i+1, ref, joinOrNone(m.targetNames())))
+				continue
+			}
+			if sym.Kind != "target" {
+				errs = append(errs, fmt.Errorf("%s: %s: auth block %d: %s is a %s block, not a target",
+					file, s.Addr(), i+1, ref, sym.Kind))
+			}
+		}
+	}
+	return errs
+}
+
+// checkAuthCoverage enforces the rule that a server which declares any auth
+// block must have a binding on every target it is bound on (SPEC.md §3.6):
+// otherwise a server picks up authentication on one path and silently loses it
+// on another. A server with no auth block at all is unauthenticated
+// everywhere, which is the normal case for a public or local server.
+//
+// v0 has no per-target tool source blocks, so a tool binds on every declared
+// target; a server referenced by any tool is therefore bound on all of them.
+func (m *Module) checkAuthCoverage() []error {
+	referenced := map[string][]string{} // server name → tool addresses, in module order
+	for _, t := range m.Tools {
+		if t.Source == nil || t.Source.Kind != "mcp" {
+			continue
+		}
+		server, _, err := schema.ParseMCPURI(t.Source.URI)
+		if err != nil {
+			continue // already reported by resolveToolSource
+		}
+		referenced[server] = append(referenced[server], t.Addr())
+	}
+
+	var errs []error
+	for _, s := range m.MCPServers {
+		tools := referenced[s.Name]
+		if len(s.Auth) == 0 || len(tools) == 0 {
+			continue
+		}
+		file := m.symbols[s.Addr()].File
+		for _, tgt := range m.Targets {
+			if _, ok := s.AuthFor(tgt.Addr()); ok {
+				continue
+			}
+			errs = append(errs, fmt.Errorf("%s: %s: declares auth but has no binding for %s; add an auth block naming it, or remove the others (tools bound to this server: %s)",
+				file, s.Addr(), tgt.Addr(), strings.Join(tools, ", ")))
+		}
+	}
+	return errs
+}
+
+// claudeTargetName is the target label that selects the Claude Managed Agents
+// provider (SPEC.md §3.5).
+const claudeTargetName = "claude_agents"
+
+// checkCredentialTargets enforces the (scheme, target) matrix of SPEC.md §3.6
+// and the transport matrix above it, plus §3.5's rule that a target whose
+// servers use connection:// must declare the vault those credentials live in.
+//
+// The rejected (scheme, target) pairs are exactly the ones that would force
+// kastor to read a secret and transmit it: env:// on a platform target means
+// kastor resolving the variable and sending its value, and connection:// off
+// the platform means there is no platform store to match the id against.
+func (m *Module) checkCredentialTargets() []error {
+	referenced := map[string]bool{}
+	for _, t := range m.Tools {
+		if t.Source == nil || t.Source.Kind != "mcp" {
+			continue
+		}
+		if server, _, err := schema.ParseMCPURI(t.Source.URI); err == nil {
+			referenced[server] = true
+		}
+	}
+
+	var errs []error
+	for _, s := range m.MCPServers {
+		if !referenced[s.Name] {
+			continue // an unreferenced server is bound nowhere
+		}
+		file := m.symbols[s.Addr()].File
+
+		for _, tgt := range m.Targets {
+			if s.Transport == "stdio" && tgt.Type == "platform" {
+				errs = append(errs, fmt.Errorf("%s: %s: transport \"stdio\" cannot be bound on %s; a platform dials a URL and cannot spawn a local process",
+					file, s.Addr(), tgt.Addr()))
+			}
+
+			auth, ok := s.AuthFor(tgt.Addr())
+			if !ok {
+				continue
+			}
+			scheme, _, err := schema.ParseCredentialRef(auth.Ref)
+			if err != nil {
+				continue // already reported at parse time
+			}
+			switch scheme {
+			case schema.SchemeEnv:
+				// Rejected on claude_agents specifically, per §3.6's table:
+				// the platform's agent object accepts no credential, so
+				// honoring env:// would mean kastor reading the variable and
+				// transmitting its value. Other platform targets are not
+				// listed and are not rejected — target.memory dials nothing,
+				// so a binding on it is unused rather than wrong.
+				if tgt.Name == claudeTargetName {
+					errs = append(errs, fmt.Errorf("%s: %s: auth ref %q cannot be bound on %s; the platform's agent object accepts no credential and kastor never reads a credential value — use connection://<credential_id>",
+						file, s.Addr(), auth.Ref, tgt.Addr()))
+				}
+			case schema.SchemeConnection:
+				if tgt.Name != claudeTargetName {
+					errs = append(errs, fmt.Errorf("%s: %s: auth ref %q cannot be bound on %s; only %s holds platform connections — use env://<NAME>",
+						file, s.Addr(), auth.Ref, tgt.Addr(), "target."+claudeTargetName))
+					continue
+				}
+				if tgt.VaultID == "" {
+					errs = append(errs, fmt.Errorf("%s: %s: auth ref %q needs a vault to resolve against; %s must declare \"vault_id\"",
+						file, s.Addr(), auth.Ref, tgt.Addr()))
+				}
+			}
+		}
+	}
+	return errs
+}
+
+func (m *Module) mcpServerNames() []string {
+	names := make([]string, 0, len(m.MCPServers))
+	for _, s := range m.MCPServers {
+		names = append(names, s.Name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func (m *Module) targetNames() []string {
+	names := make([]string, 0, len(m.Targets))
+	for _, t := range m.Targets {
+		names = append(names, t.Addr())
+	}
+	sort.Strings(names)
+	return names
+}
+
+func joinOrNone(items []string) string {
+	if len(items) == 0 {
+		return "none declared"
+	}
+	return strings.Join(items, ", ")
 }
 
 func hasOutput(a *schema.Agent, name string) bool {

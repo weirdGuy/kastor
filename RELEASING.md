@@ -35,6 +35,10 @@ Nothing below is automated. Work through it before you tag.
    /tmp/kastor build examples/weather && /tmp/kastor plan examples/weather
    ```
 
+   `kastor doctor` is deliberately not in this loop: on `target.memory` its
+   remote objects die with the process, so every run reports them missing and
+   exits 1. Its live coverage is the acceptance run below.
+
 4. **`CHANGELOG.md` is rolled.** The `[Unreleased]` section is renamed to the
    new version with today's date, a fresh empty `[Unreleased]` sits above it,
    and the link references at the bottom are updated. Every entry must describe
@@ -75,6 +79,12 @@ go test ./cmd/kastor -run TestClaudeManagedAgentsAcceptance -v -count=1
 The test skips unless the first three variables are set, so a normal
 `go test ./...` never runs it.
 
+`KASTOR_MCP_KASTOR_ACCEPTANCE_URL` is a *harness* input, not a kastor
+mechanism. Since KAS-63 a server's address is spec (SPEC.md §3.6): the run
+copies the acceptance module to a temp directory and rewrites the `mcp_server`
+block's `url` placeholder from the variable, so the module still owns the
+address while the run stays pointable at whatever server you have.
+
 `KASTOR_MCP_ACCEPTANCE_TOOL` exists because the live session step has to call a
 tool that actually exists: the acceptance module declares `echo`, and a server
 that serves something else needs its own tool named here (`tavily_search`, for
@@ -100,6 +110,17 @@ reaches the deployed agent — a permission that is stored but ignored looks
 identical to every CRUD assertion. The session and environment are deleted
 afterwards; unlike the agent, both are reversible. The test logs the session's
 Console trace URL, which is worth opening if the turn fails.
+
+It also runs **`kastor doctor` against the live agent** (KAS-63) and asserts it
+reports ready. The acceptance module's server declares no auth, so what this
+covers is the remote read and the tool-permission check against a real agent
+object — the credential path is covered offline against the fake vault, since
+exercising it live would mean creating and expiring a real vault credential per
+run. If you have a vault to hand, the fuller manual check is worth one pass:
+add `vault_id` and a `connection://` ref to the copied module, run `doctor`
+before authorizing the connection (expect `✗`, exit 1), authorize it and re-run
+(expect exit 0), then re-run with the vault host blocked (expect `? could not
+verify`, never "does not exist").
 
 **Each run permanently archives an agent.** The test creates a real agent and
 destroys it, and `destroy` on this target means *archive*, which is

@@ -10,3 +10,7 @@ model "fast" {
 target "fake" {
   type = "platform"
 }
+
+mcp_server "search-server" {
+  url = "https://mcp.example.com/search"
+}

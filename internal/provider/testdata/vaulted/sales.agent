@@ -1,0 +1,14 @@
+agent "sales" {
+  description = "Answers questions about CRM records"
+
+  model = model.fast
+  tools = [tool.crm_search, tool.docs_lookup]
+
+  input "question" {
+    type = string
+  }
+
+  output "answer" {
+    type = string
+  }
+}

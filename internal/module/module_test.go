@@ -192,6 +192,50 @@ func TestLoadErrors(t *testing.T) {
 				`bad.agent`,
 			},
 		},
+		{
+			name: "mcp uri naming an undeclared server lists what is declared",
+			dir:  "unknown_mcp_server",
+			wantErrs: []string{
+				`tools.tool: tool.search: source uri "mcp://ghost/search" names undeclared MCP server "ghost" (declared servers: none declared)`,
+			},
+		},
+		{
+			name: "malformed mcp uri is caught by validate, not by a generator",
+			dir:  "bad_mcp_uri",
+			wantErrs: []string{
+				`tools.tool: tool.search: MCP source uri is "mcp://ghost", expected mcp://<server>/<tool>`,
+			},
+		},
+		{
+			name: "a server that declares auth must bind every target it is bound on",
+			dir:  "auth_coverage",
+			wantErrs: []string{
+				`kastor.hcl: mcp_server.hubspot: declares auth but has no binding for target.langgraph`,
+				`tools bound to this server: tool.crm_search`,
+			},
+		},
+		{
+			name: "credential schemes are checked against the target they bind on",
+			dir:  "bad_credential_targets",
+			wantErrs: []string{
+				`mcp_server.hubspot: auth ref "connection://cred_011CZkZDLs7fYzm1hXNPeRjv" needs a vault to resolve against; target.claude_agents must declare "vault_id"`,
+				`mcp_server.airtable: auth ref "env://AIRTABLE_TOKEN" cannot be bound on target.claude_agents`,
+			},
+		},
+		{
+			name: "a stdio server cannot be bound on a platform target",
+			dir:  "stdio_on_platform",
+			wantErrs: []string{
+				`mcp_server.fetch: transport "stdio" cannot be bound on target.claude_agents`,
+			},
+		},
+		{
+			name: "auth targets are resolved like any other reference",
+			dir:  "unknown_auth_target",
+			wantErrs: []string{
+				`kastor.hcl: mcp_server.hubspot: auth block 1: unknown reference target.ghost (declared targets: target.langgraph)`,
+			},
+		},
 	}
 
 	for _, tc := range tests {

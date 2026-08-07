@@ -180,11 +180,6 @@ func TestGenerateErrors(t *testing.T) {
 			wantErrs: []string{"model.mystery", `"watsonx"`, "supported: anthropic, google, ollama, openai"},
 		},
 		{
-			name:     "malformed mcp uri",
-			dir:      "bad_mcp_uri",
-			wantErrs: []string{"tool.web_search", "mcp://<server>/<tool>"},
-		},
-		{
 			name:     "model params key not a python identifier",
 			dir:      "bad_param_key",
 			wantErrs: []string{"model.fast", `"max-tokens"`, "keyword argument"},

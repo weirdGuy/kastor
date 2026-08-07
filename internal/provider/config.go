@@ -9,15 +9,18 @@ import (
 )
 
 // DesiredConfig renders one agent's closure — the agent block plus the
-// model, prompt, and tools it references — into the neutral configuration
-// providers consume. Optional fields are omitted when empty. The result is
-// normalized through a JSON round-trip so every number is a float64 and
-// equality never depends on Go-side types.
+// model, prompt, tools, and MCP servers it references — into the neutral
+// configuration providers consume. Optional fields are omitted when empty.
+// The result is normalized through a JSON round-trip so every number is a
+// float64 and equality never depends on Go-side types.
+//
+// tgt selects the per-target auth binding on each MCP server (SPEC.md §3.6);
+// nothing else in the closure varies by target in v0.
 //
 // An input default that references another agent's output is deliberately
 // not part of the config: references are ordering-only in v0 (SPEC.md §4),
 // so changing one must not read as a remote update.
-func DesiredConfig(mod *module.Module, a *schema.Agent) (Object, error) {
+func DesiredConfig(mod *module.Module, a *schema.Agent, tgt *schema.Target) (Object, error) {
 	cfg := map[string]any{}
 	if a.Description != "" {
 		cfg["description"] = a.Description
@@ -42,15 +45,33 @@ func DesiredConfig(mod *module.Module, a *schema.Agent) (Object, error) {
 	}
 
 	var tools []any
+	var servers []any
+	seenServers := map[string]bool{}
 	for _, ref := range a.Tools {
 		tool, err := lookupBlock[*schema.Tool](mod, a, ref)
 		if err != nil {
 			return nil, err
 		}
 		tools = append(tools, toolConfig(tool))
+
+		// An MCP tool drags its server's connection config into the closure:
+		// on the platform path apply *is* the deployment, so the server's
+		// address has nowhere to come from but the spec (SPEC.md §3.6).
+		server, err := mcpServerFor(mod, a, tool)
+		if err != nil {
+			return nil, err
+		}
+		if server == nil || seenServers[server.Name] {
+			continue
+		}
+		seenServers[server.Name] = true
+		servers = append(servers, mcpServerConfig(server, tgt))
 	}
 	if len(tools) > 0 {
 		cfg["tools"] = tools
+	}
+	if len(servers) > 0 {
+		cfg["mcp_servers"] = servers
 	}
 
 	var inputs []any
@@ -113,6 +134,54 @@ func toolConfig(t *schema.Tool) map[string]any {
 	}
 	tc["source"] = src
 	return tc
+}
+
+// mcpServerFor resolves the mcp_server block a tool's source binds to, or nil
+// when the tool is not an MCP tool. Both failure modes here mean the module
+// skipped the validate pipeline, which resolves these references.
+func mcpServerFor(mod *module.Module, a *schema.Agent, t *schema.Tool) (*schema.MCPServer, error) {
+	if t.Source == nil || t.Source.Kind != "mcp" {
+		return nil, nil
+	}
+	name, _, err := schema.ParseMCPURI(t.Source.URI)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %s: %w", a.Addr(), t.Addr(), err)
+	}
+	sym, ok := mod.Lookup("mcp_server." + name)
+	if !ok {
+		return nil, fmt.Errorf("%s: %s: unknown reference mcp_server.%s", a.Addr(), t.Addr(), name)
+	}
+	server, ok := sym.Block.(*schema.MCPServer)
+	if !ok {
+		return nil, fmt.Errorf("%s: %s: mcp_server.%s is not an mcp_server block", a.Addr(), t.Addr(), name)
+	}
+	return server, nil
+}
+
+// mcpServerConfig renders one MCP server for the given target. The auth ref is
+// recorded verbatim and the credential's *value* never appears — that is what
+// keeps the state file free of secrets (SPEC.md §5.1).
+func mcpServerConfig(s *schema.MCPServer, tgt *schema.Target) map[string]any {
+	sc := map[string]any{"name": s.Name, "transport": s.Transport}
+	if s.URL != "" {
+		sc["url"] = s.URL
+	}
+	if s.Command != "" {
+		sc["command"] = s.Command
+	}
+	if len(s.Args) > 0 {
+		args := make([]any, len(s.Args))
+		for i, a := range s.Args {
+			args[i] = a
+		}
+		sc["args"] = args
+	}
+	if tgt != nil {
+		if auth, ok := s.AuthFor(tgt.Addr()); ok {
+			sc["auth_ref"] = auth.Ref
+		}
+	}
+	return sc
 }
 
 // MarshalConfig serializes a config canonically: encoding/json sorts map

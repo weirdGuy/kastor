@@ -31,5 +31,8 @@ func Factory(tgt *schema.Target) (provider.Provider, error) {
 	}
 	p := New(option.WithAPIKey(key))
 	p.authEnv = env
+	// The vault backs kastor doctor's credential verification and nothing
+	// else: plan and apply never contact it (SPEC.md §3.5, §5.3).
+	p.vaultID = tgt.VaultID
 	return p, nil
 }

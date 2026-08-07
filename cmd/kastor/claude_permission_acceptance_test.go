@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -73,6 +74,32 @@ func retargetAcceptanceMCPTool(t *testing.T, dir string) {
 		t.Fatalf("retarget acceptance tool: %v", err)
 	}
 	t.Logf("acceptance MCP tool retargeted to %q via %s", name, acceptanceMCPToolEnv)
+}
+
+// retargetAcceptanceMCPServer rewrites the copied module's mcp_server url to
+// the server the run was given. Since KAS-63 the address is spec, not
+// environment (SPEC.md §3.6), so the harness supplies it by editing the copy
+// rather than by exporting a variable the provider reads at plan time.
+func retargetAcceptanceMCPServer(t *testing.T, dir string) {
+	t.Helper()
+	url := strings.TrimSpace(os.Getenv(claudeAcceptanceMCPEnv))
+	if url == "" {
+		t.Fatalf("%s is unset", claudeAcceptanceMCPEnv)
+	}
+	path := filepath.Join(dir, "kastor.hcl")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read acceptance project file: %v", err)
+	}
+	const placeholder = `"https://mcp.invalid/acceptance"`
+	if !strings.Contains(string(data), placeholder) {
+		t.Fatalf("acceptance project file does not contain the url placeholder %s", placeholder)
+	}
+	updated := strings.Replace(string(data), placeholder, strconv.Quote(url), 1)
+	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
+		t.Fatalf("retarget acceptance MCP server: %v", err)
+	}
+	t.Logf("acceptance MCP server url set to %q via %s", url, claudeAcceptanceMCPEnv)
 }
 
 // assertAcceptanceToolGrants reads the live agent and checks that every tool

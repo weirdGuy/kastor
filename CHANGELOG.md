@@ -10,6 +10,68 @@ v0 exit criteria KAS-36 are met.
 
 ## [Unreleased]
 
+### Added
+
+- `kastor doctor`: a read-only readiness check answering the question `plan`
+  cannot (KAS-63)
+
+  `plan` and `apply` are about declared configuration — "does the remote match
+  the spec". They cannot tell you whether what is deployed can actually serve a
+  request: an agent whose MCP connections are unauthenticated and whose tool
+  permissions deny everything matches its spec exactly, plans clean, and answers
+  nothing. `kastor doctor [--target name] [dir]` checks, for every agent in
+  state, that the remote object exists, that each `connection://` credential
+  resolves in the target's vault and points at the server that declares it, that
+  the deployed agent is permitted to call the tools it declares, and which
+  `env://` refs the module needs and are unset. It never invokes an agent, never
+  changes a remote object, and never writes state. Exit 0 ready, 1 findings,
+  2 usage/IO.
+
+  Every check reports one of three outcomes, not two: `ok`, `failed`, or
+  `unknown`. **"Could not verify" is never rendered as "missing"** — an
+  unreachable vault and an absent credential are different facts and a user acts
+  differently on each. `unknown` counts as a finding, and is counted separately
+  in the summary. Credential ids print with their display name alongside —
+  `cred_011CZ… ("HubSpot Prod")` — because the id has to be the identifier (a
+  display name is nullable and non-unique on the platform) but output should
+  still be readable.
+
+- `mcp_server` blocks, credential references, and `vault_id` (KAS-63)
+
+  `mcp://<server>/<tool>` now resolves against a declared `mcp_server` block, so
+  an unknown server is a compile error instead of a run-time failure. Servers
+  carry `transport` (`http` | `stdio`), an address, and optional `auth` blocks
+  whose `ref` names *where* a credential lives (`env://NAME` or
+  `connection://<credential_id>`) — never its value. `auth` blocks may be bound
+  per target, which is what lets one server be authenticated on both the codegen
+  and the platform path. `target "claude_agents"` gains `vault_id`, read only by
+  `doctor`.
+
+### Changed
+
+- `claude_agents` takes an MCP server's URL from its `mcp_server` block instead
+  of from `KASTOR_MCP_<SERVER>_URL` (KAS-63)
+
+  Reading the address from the environment made a target's desired configuration
+  depend on the operator's shell, wrote a shell-derived value into the state
+  file, and left drift on that attribute comparing one shell against another. A
+  server's identity, address, and the location of its credential are spec now; a
+  credential's value never is. Editing a server's `url` is an ordinary visible
+  diff. **This is a breaking change for modules using MCP tools on
+  `claude_agents`:** declare an `mcp_server` block with the URL the variable used
+  to supply. The first `plan` after upgrading may show an `mcp_servers` diff if
+  the two disagree.
+
+- `kastor plan` no longer contacts the credential vault (KAS-63)
+
+  An earlier design verified `connection://` credentials during `plan`, by way of
+  a provider-contract amendment permitting `Diff` to issue reads. That is
+  reverted: `Diff`'s entire output vocabulary is drift, the verification could
+  never be reported as drift, and a check that cannot produce drift does not
+  belong in the drift function. Verification moved to `kastor doctor`, and `plan`
+  is a pure read again — it works offline, against the in-memory provider, and in
+  network-restricted CI with no flag to disable anything.
+
 ### Fixed
 
 - `claude_agents`: agents applied to the Claude Managed Agents platform came up

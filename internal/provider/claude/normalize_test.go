@@ -40,7 +40,6 @@ func TestNormalizeGoldenResponses(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.mcp {
-				setFullMCPEnv(t)
 			}
 			desired := &provider.Resource{Addr: tt.addr, Config: loadObject(t, tt.spec)}
 			spec, rules, err := normalizeSpec(desired)
@@ -106,14 +105,18 @@ func TestGoldenEchoToolConfigsCarryPermissions(t *testing.T) {
 	}
 }
 
-func TestNormalizedStatePreservesAppliedMCPURL(t *testing.T) {
+// A server's address is spec (SPEC.md §3.6), so editing the mcp_server block's
+// url is an ordinary visible diff — the property the environment-derived URL
+// could not offer, since it compared one operator's shell against another's.
+// The last-applied config recorded in state is unaffected by that edit: it is
+// the resolved config from the apply that wrote it.
+func TestMCPServerURLChangeIsAVisibleDiff(t *testing.T) {
 	desired := fullResource(t)
 	stateConfig, err := New().NormalizeStateConfig(desired)
 	if err != nil {
 		t.Fatalf("NormalizeStateConfig: %v", err)
 	}
 
-	t.Setenv("KASTOR_MCP_GITHUB_URL", "https://changed.example.com/mcp")
 	diffs, err := New().Diff(
 		&provider.Resource{Addr: desired.Addr, Config: stateConfig},
 		loadObject(t, "full_api_response.json"),
@@ -122,15 +125,41 @@ func TestNormalizedStatePreservesAppliedMCPURL(t *testing.T) {
 		t.Fatalf("Diff normalized state: %v", err)
 	}
 	if len(diffs) != 0 {
-		t.Errorf("last-applied state re-resolved MCP URL: %#v", diffs)
+		t.Errorf("last-applied state does not round-trip: %#v", diffs)
 	}
 
-	diffs, err = New().Diff(desired, loadObject(t, "full_api_response.json"))
+	edited := loadObject(t, "full_spec.json")
+	edited["mcp_servers"].([]any)[0].(map[string]any)["url"] = "https://changed.example.com/mcp"
+	diffs, err = New().Diff(&provider.Resource{Addr: desired.Addr, Config: edited}, loadObject(t, "full_api_response.json"))
 	if err != nil {
-		t.Fatalf("Diff current desired: %v", err)
+		t.Fatalf("Diff edited desired: %v", err)
 	}
 	if diff := cmp.Diff([]string{"mcp_servers[0]"}, paths(diffs)); diff != "" {
-		t.Errorf("current desired MCP URL change paths (-want +got):\n%s", diff)
+		t.Errorf("edited MCP URL change paths (-want +got):\n%s", diff)
+	}
+}
+
+// The credential ref reaches the provider in the closure and must not reach
+// the platform: kastor sends the server's name and URL only (SPEC.md §3.6).
+func TestMCPConnectionOmitsCredentialRef(t *testing.T) {
+	request, err := normalizeAPIRequest(fullResource(t))
+	if err != nil {
+		t.Fatalf("normalizeAPIRequest: %v", err)
+	}
+	servers, ok := request["mcp_servers"].([]any)
+	if !ok || len(servers) == 0 {
+		t.Fatalf("request declares no mcp_servers: %#v", request["mcp_servers"])
+	}
+	for i, raw := range servers {
+		server := raw.(map[string]any)
+		if got := len(server); got != 3 {
+			t.Errorf("mcp_servers[%d] = %#v, want exactly type, name and url", i, server)
+		}
+		for _, key := range []string{"auth_ref", "auth", "transport"} {
+			if _, exists := server[key]; exists {
+				t.Errorf("mcp_servers[%d] leaks %q to the platform: %#v", i, key, server)
+			}
+		}
 	}
 }
 
@@ -404,7 +433,6 @@ func TestDiffCreatePathValidatesTheSpec(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			setFullMCPEnv(t)
 			cfg := loadObject(t, "full_spec.json")
 			tt.mutate(cfg)
 
@@ -448,31 +476,47 @@ func TestDiffCreatePathReturnsTheAttributesCreateWillSet(t *testing.T) {
 	}
 }
 
-func TestDiffRequiresMCPServerURLAtPlanTime(t *testing.T) {
-	t.Setenv("KASTOR_MCP_GITHUB_URL", "")
+// The connection's address is spec, not environment (SPEC.md §3.6): a closure
+// whose MCP tool names a server the closure does not declare is a provider
+// error, so plan fails rather than apply sending a connection with no URL.
+func TestDiffRejectsUndeclaredMCPServer(t *testing.T) {
+	cfg := loadObject(t, "full_spec.json")
+	delete(cfg, "mcp_servers")
+
 	_, err := New().Diff(
-		&provider.Resource{Addr: "agent.weather", Config: loadObject(t, "full_spec.json")},
+		&provider.Resource{Addr: "agent.weather", Config: cfg},
 		loadObject(t, "full_api_response.json"),
 	)
 	if err == nil {
-		t.Fatal("Diff succeeded without an MCP endpoint URL")
+		t.Fatal("Diff succeeded with no mcp_server declared for the tool")
 	}
-	for _, text := range []string{"tool.github_get_issue", `MCP server "github"`, "KASTOR_MCP_GITHUB_URL"} {
+	for _, text := range []string{"tool.github_get_issue", `MCP server "github"`, "mcp_server block"} {
 		if !strings.Contains(err.Error(), text) {
 			t.Errorf("error %q does not contain %q", err, text)
 		}
 	}
 }
 
-func TestMCPServerURLEnvNameMatchesEveConvention(t *testing.T) {
-	tests := map[string]string{
-		"github":               "KASTOR_MCP_GITHUB_URL",
-		"github-enterprise.v2": "KASTOR_MCP_GITHUB_ENTERPRISE_V2_URL",
-		"server 42":            "KASTOR_MCP_SERVER_42_URL",
+// A stdio server has no URL for the platform to dial, and §3.6's transport
+// matrix makes that an error rather than a connection that fails at run time.
+func TestDiffRejectsStdioMCPServer(t *testing.T) {
+	cfg := loadObject(t, "full_spec.json")
+	cfg["mcp_servers"] = []any{map[string]any{
+		"name":      "github",
+		"transport": "stdio",
+		"command":   "uvx",
+	}}
+
+	_, err := New().Diff(
+		&provider.Resource{Addr: "agent.weather", Config: cfg},
+		loadObject(t, "full_api_response.json"),
+	)
+	if err == nil {
+		t.Fatal("Diff succeeded with a stdio MCP server")
 	}
-	for server, want := range tests {
-		if got := mcpServerURLEnvName(server); got != want {
-			t.Errorf("mcpServerURLEnvName(%q) = %q, want %q", server, got, want)
+	for _, text := range []string{"mcp_server.github", `"stdio"`, "dials a URL"} {
+		if !strings.Contains(err.Error(), text) {
+			t.Errorf("error %q does not contain %q", err, text)
 		}
 	}
 }
@@ -506,14 +550,8 @@ func replaceToolsWithKind(name, kind string) func(provider.Object) {
 	}
 }
 
-func setFullMCPEnv(t *testing.T) {
-	t.Helper()
-	t.Setenv("KASTOR_MCP_GITHUB_URL", fullMCPURL)
-}
-
 func fullResource(t *testing.T) *provider.Resource {
 	t.Helper()
-	setFullMCPEnv(t)
 	return &provider.Resource{Addr: "agent.weather", Config: loadObject(t, "full_spec.json")}
 }
 

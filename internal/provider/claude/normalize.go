@@ -3,7 +3,6 @@ package claude
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"reflect"
 	"strings"
 
@@ -255,7 +254,7 @@ func normalizeSpec(desired *provider.Resource) (provider.Object, normalizationRu
 		return nil, normalizationRules{}, err
 	}
 
-	tools, mcpServers, err := normalizeSpecTools(desired.Addr, cfg["tools"])
+	tools, mcpServers, err := normalizeSpecTools(desired.Addr, cfg["tools"], cfg["mcp_servers"])
 	if err != nil {
 		return nil, normalizationRules{}, err
 	}
@@ -459,8 +458,17 @@ type toolsetBuilder struct {
 	configs []any
 }
 
-func normalizeSpecTools(addr string, raw any) ([]any, []any, error) {
+// normalizeSpecTools groups the closure's tools into Managed Agents toolsets
+// and renders the URL connections its MCP tools need. Server connection config
+// comes from the closure's mcp_servers (from the module's mcp_server blocks,
+// SPEC.md §3.6) — never from the environment, which would make desired state
+// depend on the operator's shell and write a shell-derived value into state.
+func normalizeSpecTools(addr string, raw, rawServers any) ([]any, []any, error) {
 	neutral, err := arrayValue(raw, addr+".tools")
+	if err != nil {
+		return nil, nil, err
+	}
+	declared, err := specMCPServers(addr, rawServers)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -514,15 +522,20 @@ func normalizeSpecTools(addr string, raw any) ([]any, []any, error) {
 				group = newToolset(mcpToolsetType, server)
 				groups[key] = group
 				tools = append(tools, group.object)
-				env := mcpServerURLEnvName(server)
-				endpoint, exists := os.LookupEnv(env)
-				if !exists || endpoint == "" {
-					return nil, nil, fmt.Errorf("%s: MCP server %q has no endpoint URL; set %s", blockAddr, server, env)
+				declaration, ok := declared[server]
+				if !ok {
+					return nil, nil, fmt.Errorf("%s: MCP server %q is not declared in the closure; add an mcp_server block for it", blockAddr, server)
+				}
+				if declaration.transport != "http" {
+					return nil, nil, fmt.Errorf("%s: mcp_server.%s uses transport %q; Claude Managed Agents dials a URL and cannot spawn a local process", blockAddr, server, declaration.transport)
+				}
+				if declaration.url == "" {
+					return nil, nil, fmt.Errorf("%s: mcp_server.%s declares no url", blockAddr, server)
 				}
 				mcpServers = append(mcpServers, map[string]any{
 					"type": "url",
 					"name": server,
-					"url":  endpoint,
+					"url":  declaration.url,
 				})
 			}
 			group.configs = append(group.configs, enabledTool(toolName))
@@ -617,20 +630,54 @@ func parseMCPIdentity(addr, uri string) (string, string, error) {
 	return server, tool, nil
 }
 
-// mcpServerURLEnvName matches the eve target's deployment convention:
-// characters outside [A-Za-z0-9] become underscores.
-func mcpServerURLEnvName(server string) string {
-	var name strings.Builder
-	name.WriteString("KASTOR_MCP_")
-	for _, r := range strings.ToUpper(server) {
-		if r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
-			name.WriteRune(r)
-		} else {
-			name.WriteByte('_')
-		}
+// specMCPServer is one declared server from the neutral closure, reduced to
+// the fields the Claude connection needs. AuthRef is carried for kastor doctor
+// (SPEC.md §5.3) and is deliberately never sent to the platform: kastor sends
+// the server's name and URL only, and the credential stays on the platform.
+type specMCPServer struct {
+	transport string
+	url       string
+	authRef   string
+}
+
+// specMCPServers indexes the closure's mcp_servers by name.
+func specMCPServers(addr string, raw any) (map[string]specMCPServer, error) {
+	servers := map[string]specMCPServer{}
+	if raw == nil {
+		return servers, nil
 	}
-	name.WriteString("_URL")
-	return name.String()
+	list, err := arrayValue(raw, addr+".mcp_servers")
+	if err != nil {
+		return nil, err
+	}
+	for i, value := range list {
+		path := fmt.Sprintf("%s.mcp_servers[%d]", addr, i)
+		obj, ok := value.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("%s must be an object, got %T", path, value)
+		}
+		name, err := requiredString(obj["name"], path+".name")
+		if err != nil {
+			return nil, err
+		}
+		transport, err := plainString(obj, "transport", path+".transport")
+		if err != nil {
+			return nil, err
+		}
+		if transport == "" {
+			transport = "http"
+		}
+		url, err := plainString(obj, "url", path+".url")
+		if err != nil {
+			return nil, err
+		}
+		authRef, err := plainString(obj, "auth_ref", path+".auth_ref")
+		if err != nil {
+			return nil, err
+		}
+		servers[name] = specMCPServer{transport: transport, url: url, authRef: authRef}
+	}
+	return servers, nil
 }
 
 func normalizeEchoTools(tools []any) ([]any, error) {
@@ -783,6 +830,22 @@ func agentName(addr string) (string, error) {
 		return "", fmt.Errorf("claude: resource address is %q, expected agent.<name>", addr)
 	}
 	return strings.TrimPrefix(addr, prefix), nil
+}
+
+// plainString reads an optional string out of a neutral config object,
+// yielding "" when the key is absent. optionalString is its API-echo
+// counterpart: there null and absent must stay distinguishable, here they
+// cannot be — a module never writes a null into the closure.
+func plainString(obj map[string]any, key, path string) (string, error) {
+	value, exists := obj[key]
+	if !exists || value == nil {
+		return "", nil
+	}
+	text, ok := value.(string)
+	if !ok {
+		return "", fmt.Errorf("%s must be a string, got %T", path, value)
+	}
+	return text, nil
 }
 
 func optionalString(obj map[string]any, key, path string) (any, error) {

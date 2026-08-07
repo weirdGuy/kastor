@@ -66,6 +66,41 @@ func TestParseProjectFile(t *testing.T) {
 			},
 		},
 		{
+			name: "mcp_server blocks, both transports and per-target auth",
+			file: "valid_mcp_servers.hcl",
+			want: &schema.ProjectFile{
+				Targets: []*schema.Target{
+					{
+						Name:   "langgraph",
+						Type:   "codegen",
+						Output: "./gen/langgraph",
+					},
+					{
+						Name:    "claude_agents",
+						Type:    "platform",
+						VaultID: "vlt_011CZaBcDeFgHiJkLmNoPqRs",
+					},
+				},
+				MCPServers: []*schema.MCPServer{
+					{
+						Name:      "hubspot",
+						Transport: "http",
+						URL:       "https://mcp.hubspot.com",
+						Auth: []*schema.MCPAuth{
+							{Ref: "connection://cred_011CZkZDLs7fYzm1hXNPeRjv", Targets: []string{"target.claude_agents"}},
+							{Ref: "env://HUBSPOT_TOKEN", Targets: []string{"target.langgraph"}},
+						},
+					},
+					{
+						Name:      "fetch",
+						Transport: "stdio",
+						Command:   "uvx",
+						Args:      []string{"mcp-server-fetch"},
+					},
+				},
+			},
+		},
+		{
 			name:    "unclosed block is a syntax error",
 			file:    "invalid_syntax.hcl",
 			wantErr: "Unclosed configuration block",
@@ -109,6 +144,51 @@ func TestParseProjectFile(t *testing.T) {
 			name:    "platform target rejects output attribute",
 			file:    "invalid_platform_output.hcl",
 			wantErr: `target.openai_assistants: platform target does not allow "output"`,
+		},
+		{
+			name:    "stdio transport rejects url",
+			file:    "invalid_mcp_stdio_url.hcl",
+			wantErr: `mcp_server.fetch: transport "stdio" does not allow "url"`,
+		},
+		{
+			name:    "http transport requires url",
+			file:    "invalid_mcp_http_no_url.hcl",
+			wantErr: `mcp_server.hubspot: transport "http" requires "url"`,
+		},
+		{
+			name:    "transport is a closed enum",
+			file:    "invalid_mcp_transport.hcl",
+			wantErr: `mcp_server.hubspot: invalid transport "grpc"`,
+		},
+		{
+			name:    "stdio transport rejects auth",
+			file:    "invalid_mcp_stdio_auth.hcl",
+			wantErr: `mcp_server.fetch: transport "stdio" does not allow "auth"`,
+		},
+		{
+			name:    "credential scheme set is closed",
+			file:    "invalid_mcp_scheme.hcl",
+			wantErr: `unknown scheme "vault"; known schemes are connection://… or env://…`,
+		},
+		{
+			name:    "a server has at most one default auth binding",
+			file:    "invalid_mcp_two_defaults.hcl",
+			wantErr: `mcp_server.hubspot: more than one auth block without "targets"`,
+		},
+		{
+			name:    "two auth blocks cannot name the same target",
+			file:    "invalid_mcp_dup_target.hcl",
+			wantErr: `mcp_server.hubspot: two auth blocks name target.langgraph`,
+		},
+		{
+			name:    "duplicate server names are rejected",
+			file:    "invalid_mcp_dup_server.hcl",
+			wantErr: `mcp_server.hubspot: declared more than once`,
+		},
+		{
+			name:    "vault_id is meaningless off the Claude target",
+			file:    "invalid_vault_id_wrong_target.hcl",
+			wantErr: `target.memory: "vault_id" is only valid on target "claude_agents"`,
 		},
 	}
 
