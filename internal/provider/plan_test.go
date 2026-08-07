@@ -49,7 +49,7 @@ func seedAll(t *testing.T, job *provider.Job, fake *providertest.Fake) map[strin
 			continue
 		}
 		sym, _ := job.Module.Lookup(addr)
-		cfg, err := provider.DesiredConfig(job.Module, sym.Block.(*schema.Agent))
+		cfg, err := provider.DesiredConfig(job.Module, sym.Block.(*schema.Agent), job.Target)
 		if err != nil {
 			t.Fatalf("DesiredConfig(%s): %v", addr, err)
 		}

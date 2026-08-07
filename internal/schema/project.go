@@ -5,8 +5,9 @@ package schema
 // ProjectFile is the decoded form of a project file (kastor.hcl / .kastor).
 // Block order follows source order so downstream output stays deterministic.
 type ProjectFile struct {
-	Models  []*Model
-	Targets []*Target
+	Models     []*Model
+	Targets    []*Target
+	MCPServers []*MCPServer
 }
 
 // Model is a vendor-neutral model definition (SPEC.md §3.1). Agents
@@ -27,6 +28,11 @@ type Target struct {
 	Type   string // "codegen" or "platform"
 	Output string // codegen only: output directory for generated code
 	Auth   *Auth  // platform only
+	// VaultID names the platform vault holding the credentials this target's
+	// MCP servers reference (claude_agents only). It is a location, not a
+	// secret: only kastor doctor reads it, and only to verify that a
+	// connection:// ref resolves (SPEC.md §3.5, §5.3).
+	VaultID string
 }
 
 // Addr returns the block address used in references and diagnostics.

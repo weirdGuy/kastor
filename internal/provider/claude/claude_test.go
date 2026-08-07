@@ -58,7 +58,6 @@ func TestFactoryResolvesAPIKeyEnvironment(t *testing.T) {
 }
 
 func TestCreateSendsNormalizedSDKRequest(t *testing.T) {
-	setFullMCPEnv(t)
 	response := fixtureBytes(t, "full_api_response.json")
 	var requests atomic.Int32
 	p := fakeHTTPProvider(t, func(w http.ResponseWriter, r *http.Request) {
@@ -159,7 +158,6 @@ func TestReadMissingAndArchivedAreDriftData(t *testing.T) {
 }
 
 func TestUpdateReadsVersionBeforeWriting(t *testing.T) {
-	setFullMCPEnv(t)
 	response := fixtureBytes(t, "full_api_response.json")
 	desired := fullResource(t)
 	desired.Config["metadata"].(map[string]any)["obsolete"] = nil

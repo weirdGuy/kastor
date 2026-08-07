@@ -230,7 +230,7 @@ func desiredResource(job *Job, addr string) (*Resource, error) {
 	if !ok {
 		return nil, fmt.Errorf("%s: not declared in module %s", addr, job.Module.Root)
 	}
-	cfg, err := DesiredConfig(job.Module, sym.Block.(*schema.Agent))
+	cfg, err := DesiredConfig(job.Module, sym.Block.(*schema.Agent), job.Target)
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,0 @@
-agent "helper" {
-  model = model.fast
-  tools = [tool.web_search]
-}

@@ -13,3 +13,11 @@ target "langgraph" {
   type   = "codegen"
   output = "./gen/langgraph"
 }
+
+# The MCP server tool.fetch_url binds to. A stdio server is spawned by the
+# generated project and inherits its environment, so it takes no auth block.
+mcp_server "fetch" {
+  transport = "stdio"
+  command   = "uvx"
+  args      = ["mcp-server-fetch"]
+}

@@ -29,6 +29,15 @@ func agentByAddr(t *testing.T, mod *module.Module, addr string) *schema.Agent {
 	return sym.Block.(*schema.Agent)
 }
 
+func targetByAddr(t *testing.T, mod *module.Module, addr string) *schema.Target {
+	t.Helper()
+	sym, ok := mod.Lookup(addr)
+	if !ok {
+		t.Fatalf("module has no %s", addr)
+	}
+	return sym.Block.(*schema.Target)
+}
+
 func TestDesiredConfig(t *testing.T) {
 	mod := loadModule(t, "weather")
 
@@ -49,6 +58,16 @@ func TestDesiredConfig(t *testing.T) {
 					"params":   map[string]any{"temperature": 0.2, "max_tokens": float64(4096)},
 				},
 				"instructions": "You are a weather assistant for {{location}}.\n",
+				// The MCP tool drags its server's connection config into the
+				// closure: on the platform path apply is the deployment, so
+				// the address comes from the spec (SPEC.md §3.6).
+				"mcp_servers": []any{
+					map[string]any{
+						"name":      "search-server",
+						"transport": "http",
+						"url":       "https://mcp.example.com/search",
+					},
+				},
 				"tools": []any{
 					map[string]any{
 						"name":        "web_search",
@@ -92,7 +111,7 @@ func TestDesiredConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.addr, func(t *testing.T) {
-			got, err := provider.DesiredConfig(mod, agentByAddr(t, mod, tt.addr))
+			got, err := provider.DesiredConfig(mod, agentByAddr(t, mod, tt.addr), targetByAddr(t, mod, "target.fake"))
 			if err != nil {
 				t.Fatalf("DesiredConfig: %v", err)
 			}
@@ -109,7 +128,7 @@ func TestMarshalConfigIsDeterministic(t *testing.T) {
 
 	var first []byte
 	for i := 0; i < 5; i++ {
-		cfg, err := provider.DesiredConfig(mod, a)
+		cfg, err := provider.DesiredConfig(mod, a, targetByAddr(t, mod, "target.fake"))
 		if err != nil {
 			t.Fatalf("DesiredConfig #%d: %v", i+1, err)
 		}

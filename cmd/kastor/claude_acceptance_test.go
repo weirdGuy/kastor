@@ -46,6 +46,7 @@ func TestClaudeManagedAgentsAcceptance(t *testing.T) {
 
 	dir := copyModule(t, "testdata/claude_acceptance")
 	retargetAcceptanceMCPTool(t, dir)
+	retargetAcceptanceMCPServer(t, dir)
 	destroyed := false
 	t.Cleanup(func() {
 		if destroyed {

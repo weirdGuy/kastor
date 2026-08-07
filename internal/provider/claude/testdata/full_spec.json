@@ -26,6 +26,14 @@
       }
     }
   ],
+  "mcp_servers": [
+    {
+      "name": "github",
+      "transport": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "auth_ref": "connection://cred_011CZkZDLs7fYzm1hXNPeRjv"
+    }
+  ],
   "metadata": {
     "team": "platform"
   }
