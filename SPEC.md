@@ -163,14 +163,15 @@ promise", for what that distinction costs:
 
 | | `langgraph` | `eve` | `claude_agents` |
 |---|-------------|-------|-----------------|
-| `requires_approval` | not yet — deferred to its own issue | yes — `needsApproval` on an authored tool, `approval` on an MCP connection | yes — the tool's `permission_policy` becomes `always_ask` |
+| `requires_approval` | yes — `HumanInTheLoopMiddleware` plus `InMemorySaver` | yes — `needsApproval` on an authored tool, `approval` on an MCP connection | yes — the tool's `permission_policy` becomes `always_ask` |
 
-On `langgraph` the mapping exists but is not free: `HumanInTheLoopMiddleware`
-requires a checkpointer and a resume step, so honoring approval means the
-generated `run()` stops being a one-shot call and gains an interrupt/resume
-contract. That is a change to the generated project's public shape, not a flag,
-which is why it is deferred rather than unsupported. The support table says
-"not yet" for exactly this reason, and will say "yes" without a spec change.
+On `langgraph`, `interrupt_on` names every granted tool: `True` for the
+`requires_approval` subset and `False` for the rest. Human-in-the-loop requires
+a checkpointer, so generated agents use `InMemorySaver`. That is intentional:
+Kastor makes no promise about persisting tool state, and a durable checkpointer
+is a memory-substrate question (§7; KAS-61). The generated project's
+interrupt/resume entry-point contract remains separate work (KAS-67); approval
+configuration does not redefine it implicitly.
 
 ### 3.3 `tool` (.tool file)
  
@@ -263,7 +264,7 @@ the resource at all, or only render it without honoring a modifier on it?**
 | | Example | Where it fails | Blast radius |
 |---|---------|----------------|--------------|
 | **Binding** — the target cannot render the resource | `builtin` on `langgraph`: no tool function can be emitted | `validate`, module-wide | every command, every target |
-| **Feature capability** — the resource renders, a modifier on it cannot be honored | `requires_approval` on `langgraph`: `tools/<name>.py` emits correctly; only the approval gate has nowhere to go | `validate` **warns**; `build` errors for that target alone | that one codegen target |
+| **Feature capability** — the resource renders, a modifier on it cannot be honored | a future modifier whose resource still renders correctly but whose behavior the target cannot preserve | `validate` **warns**; the consuming command errors for that target alone | that one target |
 
 A feature capability therefore does **not** block `kastor plan` for a platform
 target in the same module, and does not block `kastor build --target <other>`.

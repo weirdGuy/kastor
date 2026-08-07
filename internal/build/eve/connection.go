@@ -13,11 +13,12 @@ import (
 // connects per server (connections/<server>.ts), with the spec's pinned tool
 // names as the connection's allow-list.
 type mcpServer struct {
-	Name    string
-	Tools   []*schema.Tool    // kastor tool blocks bound to this server
-	Allow   []string          // server-side tool names, sorted unique
-	Decl    *schema.MCPServer // the mcp_server block this binds (SPEC.md §3.6)
-	AuthEnv string            // env var holding the bearer token; "" unauthenticated
+	Name             string
+	Tools            []*schema.Tool    // kastor tool blocks bound to this server
+	Allow            []string          // server-side tool names, sorted unique
+	RequiresApproval []string          // gated server-side tool names, sorted unique
+	Decl             *schema.MCPServer // the mcp_server block this binds (SPEC.md §3.6)
+	AuthEnv          string            // env var holding the bearer token; "" unauthenticated
 }
 
 // parseMCPURI splits mcp://<server>/<tool> into its two parts.
@@ -38,8 +39,9 @@ func parseMCPURI(t *schema.Tool) (server, tool string, err error) {
 
 // groupMCPServers buckets an agent's mcp-kind tools by server, in sorted
 // server order with sorted unique allow-lists, resolving each against its
-// declared mcp_server block and this target's auth binding.
-func groupMCPServers(tools []*schema.Tool, decls map[string]*schema.MCPServer, targetAddr string) ([]*mcpServer, error) {
+// declared mcp_server block and this target's auth binding, and marking the
+// tools this agent gates behind approval.
+func groupMCPServers(tools []*schema.Tool, agent *schema.Agent, decls map[string]*schema.MCPServer, targetAddr string) ([]*mcpServer, error) {
 	byName := map[string]*mcpServer{}
 	for _, t := range tools {
 		server, name, err := parseMCPURI(t)
@@ -64,6 +66,9 @@ func groupMCPServers(tools []*schema.Tool, decls map[string]*schema.MCPServer, t
 		}
 		s.Tools = append(s.Tools, t)
 		s.Allow = append(s.Allow, name)
+		if agent.ApprovalRequired(t.Addr()) {
+			s.RequiresApproval = append(s.RequiresApproval, name)
+		}
 	}
 
 	servers := make([]*mcpServer, 0, len(byName))
@@ -72,6 +77,8 @@ func groupMCPServers(tools []*schema.Tool, decls map[string]*schema.MCPServer, t
 		sort.Slice(s.Tools, func(i, j int) bool { return s.Tools[i].Name < s.Tools[j].Name })
 		sort.Strings(s.Allow)
 		s.Allow = dedupe(s.Allow)
+		sort.Strings(s.RequiresApproval)
+		s.RequiresApproval = dedupe(s.RequiresApproval)
 		servers = append(servers, s)
 	}
 	return servers, nil
@@ -142,6 +149,13 @@ func genConnection(s *mcpServer) []byte {
 		b.WriteString("// It declares no auth, so the connection is unauthenticated.\n")
 	}
 	b.WriteString("\nimport { defineMcpClientConnection } from \"eve/connections\";\n")
+	if len(s.RequiresApproval) > 0 {
+		values := make([]string, len(s.RequiresApproval))
+		for i, name := range s.RequiresApproval {
+			values[i] = tsString(name)
+		}
+		fmt.Fprintf(&b, "\nconst requiresApproval = new Set([%s]);\n", strings.Join(values, ", "))
+	}
 	b.WriteString("\nexport default defineMcpClientConnection({\n")
 	fmt.Fprintf(&b, "  url: %s,\n", tsString(s.Decl.URL))
 	fmt.Fprintf(&b, "  description: %s,\n", tsString(connectionDescription(s)))
@@ -150,6 +164,9 @@ func genConnection(s *mcpServer) []byte {
 		allow[i] = tsString(name)
 	}
 	fmt.Fprintf(&b, "  tools: { allow: [%s] },\n", strings.Join(allow, ", "))
+	if len(s.RequiresApproval) > 0 {
+		b.WriteString("  approval: ({ toolName }) => requiresApproval.has(toolName),\n")
+	}
 	if s.AuthEnv != "" {
 		b.WriteString("  // Read at first server contact, not at build: eve build evaluates this\n")
 		b.WriteString("  // module, so the credential check cannot live at the top level.\n")

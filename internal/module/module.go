@@ -260,7 +260,12 @@ func (m *Module) resolveAgent(a *schema.Agent) []error {
 	file := m.symbols[a.Addr()].File
 
 	var errs []error
+	checked := map[string]bool{}
 	check := func(ref string) {
+		if checked[ref] {
+			return
+		}
+		checked[ref] = true
 		if _, ok := m.symbols[ref]; !ok {
 			errs = append(errs, fmt.Errorf("%s: %s: unknown reference %s", file, a.Addr(), ref))
 		}
@@ -271,6 +276,9 @@ func (m *Module) resolveAgent(a *schema.Agent) []error {
 		check(a.SystemPrompt)
 	}
 	for _, ref := range a.Tools {
+		check(ref)
+	}
+	for _, ref := range a.RequiresApproval {
 		check(ref)
 	}
 	for _, ref := range a.DependsOn {

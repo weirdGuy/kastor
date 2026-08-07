@@ -12,6 +12,18 @@ v0 exit criteria KAS-36 are met.
 
 ### Added
 
+- `requires_approval` on agent blocks (KAS-66)
+
+  `tools` remains the grant; `requires_approval = [tool.x]` narrows granted
+  tools by pausing their calls for a human. Every entry must also appear in
+  `tools`, duplicates and non-tool/unknown references are errors, and omission
+  from `tools` remains the denial. LangGraph emits
+  `HumanInTheLoopMiddleware` with an `InMemorySaver` checkpointer, eve emits
+  authored-tool or per-MCP-tool approval gates, and Claude Managed Agents maps
+  the subset to `always_ask` while keeping the rest `always_allow`. The policy
+  stays in normalized state so console changes are drift, and `kastor doctor`
+  verifies the remote gate split exactly.
+
 - `kastor doctor`: a read-only readiness check answering the question `plan`
   cannot (KAS-63)
 
@@ -125,9 +137,8 @@ v0 exit criteria KAS-36 are met.
   `permission_policy` to `always_allow` on every tool in the agent closure, the
   permission is part of the compared object — so a tool flipped to deny in the
   Console is reported as drift — and `apply` reconciles it back to the spec.
-  Making the policy configurable in the spec is a later design pass
-  KAS-62; until then every
-  declared tool is allowed.
+  KAS-66 now makes that policy configurable through `requires_approval`; tools
+  outside that subset keep this explicit allow default.
 
   The first plan after upgrading an agent applied by an earlier version reports
   the remote denial as drift and proposes the converging update.

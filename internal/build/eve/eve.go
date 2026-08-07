@@ -273,7 +273,7 @@ func (pb *projectBuilder) emitAgentDir(a *schema.Agent, dir, parent string, orde
 			mcpTools = append(mcpTools, tool)
 			continue
 		}
-		data, err := genTool(tool)
+		data, err := genTool(tool, a.ApprovalRequired(ref))
 		if err != nil {
 			return err
 		}
@@ -291,7 +291,7 @@ func (pb *projectBuilder) emitAgentDir(a *schema.Agent, dir, parent string, orde
 		pb.add(path, data)
 	}
 
-	servers, err := groupMCPServers(mcpTools, pb.idx.mcpServers, pb.idx.targetAddr)
+	servers, err := groupMCPServers(mcpTools, a, pb.idx.mcpServers, pb.idx.targetAddr)
 	if err != nil {
 		return err
 	}

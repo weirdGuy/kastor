@@ -45,6 +45,10 @@ func Build(mod *module.Module) (*Graph, error) {
 			refs = append(refs, a.SystemPrompt)
 		}
 		refs = append(refs, a.Tools...)
+		// Approval references create no new edge because validation requires
+		// them to be a subset of Tools, but include them in the ordinary
+		// reference pass so that invariant stays explicit (SPEC.md §3.2).
+		refs = append(refs, a.RequiresApproval...)
 		refs = append(refs, a.DependsOn...)
 		for _, in := range a.Inputs {
 			if in.DefaultRef != "" {

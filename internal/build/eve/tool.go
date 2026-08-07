@@ -19,12 +19,12 @@ import (
 //	          (see genConnection); genTool must not be called for it
 //	builtin → codegen error, permanently (platform-provided, no local binding)
 //	script  → codegen error, for now (glue-code execution deferred, issue #36)
-func genTool(t *schema.Tool) ([]byte, error) {
+func genTool(t *schema.Tool, requiresApproval bool) ([]byte, error) {
 	switch t.Source.Kind {
 	case "http":
-		return genHTTPTool(t)
+		return genHTTPTool(t, requiresApproval)
 	case "runtime":
-		return genRuntimeTool(t)
+		return genRuntimeTool(t, requiresApproval)
 	case "builtin":
 		return nil, fmt.Errorf("%s: source kind \"builtin\" is platform-provided and has no eve codegen mapping; use a platform target for it", t.Addr())
 	case "script":
@@ -102,7 +102,7 @@ func zodType(t string) string {
 // genHTTPTool binds the tool to a REST endpoint: parameters are POSTed as a
 // JSON object to the source uri and the response body is coerced to the
 // declared return type — the same binding as the langgraph target.
-func genHTTPTool(t *schema.Tool) ([]byte, error) {
+func genHTTPTool(t *schema.Tool, requiresApproval bool) ([]byte, error) {
 	u, err := url.Parse(t.Source.URI)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return nil, fmt.Errorf("%s: source uri %q is not a valid http(s) endpoint", t.Addr(), t.Source.URI)
@@ -117,6 +117,9 @@ func genHTTPTool(t *schema.Tool) ([]byte, error) {
 	b.WriteString("\nexport default defineTool({\n")
 	fmt.Fprintf(&b, "  description: %s,\n", tsString(toolSummary(t)))
 	fmt.Fprintf(&b, "  inputSchema: %s,\n", schema)
+	if requiresApproval {
+		b.WriteString("  needsApproval: () => true,\n")
+	}
 	b.WriteString("  async execute(input) {\n")
 	fmt.Fprintf(&b, "    const response = await fetch(%s, {\n", tsString(t.Source.URI))
 	b.WriteString("      method: \"POST\",\n")
@@ -157,7 +160,7 @@ func toolFile(t *schema.Tool) string {
 // genRuntimeTool emits the stub SPEC.md §3.3 promises for kind "runtime":
 // the typed interface is generated, the body is the user's to supply. The file
 // is generated once and preserved after that (see build.File.Preserve).
-func genRuntimeTool(t *schema.Tool) ([]byte, error) {
+func genRuntimeTool(t *schema.Tool, requiresApproval bool) ([]byte, error) {
 	schema, err := zodSchema(t, "  ")
 	if err != nil {
 		return nil, err
@@ -168,6 +171,9 @@ func genRuntimeTool(t *schema.Tool) ([]byte, error) {
 	b.WriteString("\nexport default defineTool({\n")
 	fmt.Fprintf(&b, "  description: %s,\n", tsString(toolSummary(t)))
 	fmt.Fprintf(&b, "  inputSchema: %s,\n", schema)
+	if requiresApproval {
+		b.WriteString("  needsApproval: () => true,\n")
+	}
 	b.WriteString("  async execute() {\n")
 	b.WriteString("    // TODO: implement this runtime tool. This file is yours once you edit it:\n")
 	b.WriteString("    // kastor build writes the stub once and then leaves the file alone. If the\n")

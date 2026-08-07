@@ -1,0 +1,6 @@
+agent "worker" {
+  model = model.fast
+
+  tools = [tool.safe_read, tool.publish]
+  requires_approval = [tool.publish]
+}

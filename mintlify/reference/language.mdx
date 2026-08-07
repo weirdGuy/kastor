@@ -21,7 +21,8 @@ agent "weather" {
 
   model         = model.fast
   system_prompt = prompt.weather_system
-  tools         = [tool.web_search]
+  tools             = [tool.web_search]
+  requires_approval = [tool.web_search]
 
   input "location" {
     type        = string
@@ -49,6 +50,7 @@ Fields:
 | `model` | required | Reference like `model.fast`. |
 | `system_prompt` | optional | Reference like `prompt.weather_system`. |
 | `tools` | optional | List of `tool.<name>` references. |
+| `requires_approval` | optional | Subset of `tools` that pauses for a human before execution. |
 | `input` | optional | Named input blocks. |
 | `output` | optional | Named output blocks. |
 | `depends_on` | optional | List of `agent.<name>` references for ordering. |
@@ -73,6 +75,7 @@ Rules:
 
 - Every variable the agent's `system_prompt` requires must be satisfiable from that agent's own inputs and outputs. A variable that is neither is a validation error naming the agent, the prompt, and the variable.
 - An input `default` may be a literal or an `agent.<name>.output.<name>` reference. The reference is checked at compile time and creates a dependency edge, but v0 does not wire the data flow — the caller still supplies the value. See [references and dependency inference](/concepts/overview#references-and-dependency-inference).
+- `tools` is the grant; `requires_approval` only narrows it. Every approval entry must also appear in `tools`, duplicates are errors, and omission from `tools` is the denial. LangGraph emits `HumanInTheLoopMiddleware`, eve emits its authored-tool or connection approval gate, and `claude_agents` emits `always_ask` for the named tools. Richer per-target decision types and predicates are deliberately not part of the portable language.
 
 ## `.tool`
 

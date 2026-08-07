@@ -29,7 +29,7 @@
           "name": "write",
           "enabled": true,
           "permission_policy": {
-            "type": "always_allow"
+            "type": "always_ask"
           }
         }
       ]
@@ -48,7 +48,7 @@
           "name": "get_issue",
           "enabled": true,
           "permission_policy": {
-            "type": "always_allow"
+            "type": "always_ask"
           }
         }
       ]

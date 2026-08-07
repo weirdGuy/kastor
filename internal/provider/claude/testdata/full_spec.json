@@ -5,6 +5,10 @@
     "id": "claude-opus-5"
   },
   "instructions": "Use the available tools and cite concrete evidence.",
+  "requires_approval": [
+    "tool.write",
+    "tool.github_get_issue"
+  ],
   "tools": [
     {
       "name": "read",

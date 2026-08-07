@@ -21,7 +21,8 @@ An agent owns its model, tools, optional system prompt, input contract, output c
 agent "weather" {
   model         = model.fast
   system_prompt = prompt.weather_system
-  tools         = [tool.web_search]
+  tools             = [tool.web_search]
+  requires_approval = [tool.web_search]
 
   input "location" {
     type = string
@@ -34,6 +35,12 @@ agent "weather" {
 ```
 
 The current type set is intentionally small: `string`, `number`, and `bool`.
+
+`tools` is the agent's grant. A tool omitted there cannot be called;
+`requires_approval` narrows granted tools by pausing their calls for a human.
+The two lists are not peers, so an approval entry that is absent from `tools`
+is an error rather than an implicit grant. Tools in `tools` but not in
+`requires_approval` run unsupervised.
 
 ## Tools
 

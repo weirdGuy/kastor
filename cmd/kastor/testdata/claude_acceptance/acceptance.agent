@@ -4,4 +4,5 @@ agent "kas_38_acceptance" {
   model         = model.acceptance
   system_prompt = prompt.acceptance_system
   tools         = [tool.read, tool.echo]
+  requires_approval = [tool.read]
 }

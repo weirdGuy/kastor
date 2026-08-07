@@ -11,7 +11,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/weirdGuy/kastor/internal/build"
+	"github.com/weirdGuy/kastor/internal/module"
+	"github.com/weirdGuy/kastor/internal/provider"
+	"github.com/weirdGuy/kastor/internal/provider/claude"
+	"github.com/weirdGuy/kastor/internal/schema"
 	"github.com/weirdGuy/kastor/internal/state"
 )
 
@@ -218,6 +224,85 @@ func TestBuildCommandSingleTarget(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(dir, "gen", "langgraph", f)); err != nil {
 			t.Errorf("expected generated file %s: %v", f, err)
 		}
+	}
+}
+
+func TestBuildCommandRequiresApprovalAllTargets(t *testing.T) {
+	dir := copyModule(t, "testdata/build/requires_approval")
+	out, err := runBuildCmd(t, dir)
+	if err != nil {
+		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out)
+	}
+	for _, target := range []string{"eve", "langgraph"} {
+		if !strings.Contains(out, "Built target "+target+":") {
+			t.Errorf("output missing %s success line:\n%s", target, out)
+		}
+	}
+
+	langgraphAgent, err := os.ReadFile(filepath.Join(dir, "gen", "langgraph", "agents", "worker.py"))
+	if err != nil {
+		t.Fatalf("read generated LangGraph agent: %v", err)
+	}
+	for _, want := range []string{
+		"HumanInTheLoopMiddleware",
+		`"publish": True`,
+		`"safe_read": False`,
+		"checkpointer=InMemorySaver()",
+	} {
+		if !strings.Contains(string(langgraphAgent), want) {
+			t.Errorf("LangGraph agent missing %q:\n%s", want, langgraphAgent)
+		}
+	}
+
+	eveConnection, err := os.ReadFile(filepath.Join(dir, "gen", "eve", "worker", "agent", "connections", "actions.ts"))
+	if err != nil {
+		t.Fatalf("read generated eve connection: %v", err)
+	}
+	for _, want := range []string{
+		`new Set(["publish_record"])`,
+		`approval: ({ toolName }) => requiresApproval.has(toolName)`,
+	} {
+		if !strings.Contains(string(eveConnection), want) {
+			t.Errorf("eve connection missing %q:\n%s", want, eveConnection)
+		}
+	}
+
+	mod, err := module.Load(dir)
+	if err != nil {
+		t.Fatalf("Load generated acceptance module: %v", err)
+	}
+	worker, ok := mod.Lookup("agent.worker")
+	if !ok {
+		t.Fatal("acceptance module has no agent.worker")
+	}
+	var target *schema.Target
+	for _, candidate := range mod.Targets {
+		if candidate.Name == "claude_agents" {
+			target = candidate
+			break
+		}
+	}
+	if target == nil {
+		t.Fatal("acceptance module has no target.claude_agents")
+	}
+	cfg, err := provider.DesiredConfig(mod, worker.Block.(*schema.Agent), target)
+	if err != nil {
+		t.Fatalf("DesiredConfig: %v", err)
+	}
+	normalized, err := claude.New().NormalizeStateConfig(&provider.Resource{Addr: "agent.worker", Config: cfg})
+	if err != nil {
+		t.Fatalf("NormalizeStateConfig: %v", err)
+	}
+	policies := map[string]string{}
+	for _, rawToolset := range normalized["tools"].([]any) {
+		for _, rawConfig := range rawToolset.(map[string]any)["configs"].([]any) {
+			config := rawConfig.(map[string]any)
+			policy := config["permission_policy"].(map[string]any)
+			policies[config["name"].(string)] = policy["type"].(string)
+		}
+	}
+	if diff := cmp.Diff(map[string]string{"publish_record": "always_ask", "read_record": "always_allow"}, policies); diff != "" {
+		t.Errorf("Claude policies (-want +got):\n%s", diff)
 	}
 }
 

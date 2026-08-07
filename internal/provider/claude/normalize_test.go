@@ -163,21 +163,26 @@ func TestMCPConnectionOmitsCredentialRef(t *testing.T) {
 	}
 }
 
-// TestNormalizeRequestGrantsEveryDeclaredTool is the KAS-57 contract on the
-// write path: declaring a tool is the grant, so no tool in the agent closure
-// may leave its permission to the platform's restrictive default.
-func TestNormalizeRequestGrantsEveryDeclaredTool(t *testing.T) {
+// TestNormalizeRequestAuthorsEveryDeclaredToolPolicy pins both halves of the
+// grant: each declared tool is enabled, and requires_approval selects ask
+// without changing which tools the agent may call.
+func TestNormalizeRequestAuthorsEveryDeclaredToolPolicy(t *testing.T) {
 	request, err := normalizeAPIRequest(fullResource(t))
 	if err != nil {
 		t.Fatalf("normalizeAPIRequest: %v", err)
 	}
 
+	wantPolicies := map[string]string{
+		"read":      alwaysAllowPolicy,
+		"write":     alwaysAskPolicy,
+		"get_issue": alwaysAskPolicy,
+	}
 	granted := map[string]any{}
 	for i, rawToolset := range request["tools"].([]any) {
 		toolset := rawToolset.(map[string]any)
 		for j, rawConfig := range toolset["configs"].([]any) {
 			config := rawConfig.(map[string]any)
-			want := map[string]any{"type": alwaysAllowPolicy}
+			want := map[string]any{"type": wantPolicies[config["name"].(string)]}
 			if diff := cmp.Diff(want, config["permission_policy"]); diff != "" {
 				t.Errorf("request.tools[%d].configs[%d] permission (-want +got):\n%s", i, j, diff)
 			}
@@ -201,10 +206,9 @@ func TestNormalizeRequestGrantsEveryDeclaredTool(t *testing.T) {
 	}
 }
 
-// TestUpdateParamsGrantEveryDeclaredTool covers the reconcile half: an agent
-// whose tools were flipped to deny in the console must be sent back to the
-// spec's grant, not merely left alone.
-func TestUpdateParamsGrantEveryDeclaredTool(t *testing.T) {
+// TestUpdateParamsAuthorsEveryDeclaredToolPolicy covers the reconcile half:
+// console edits are replaced by the exact allow/ask split in the spec.
+func TestUpdateParamsAuthorsEveryDeclaredToolPolicy(t *testing.T) {
 	params, err := normalizeUpdateParams(fullResource(t), 7)
 	if err != nil {
 		t.Fatalf("normalizeUpdateParams: %v", err)
@@ -218,11 +222,16 @@ func TestUpdateParamsGrantEveryDeclaredTool(t *testing.T) {
 		t.Fatalf("decode update params: %v", err)
 	}
 
+	wantPolicies := map[string]string{
+		"read":      alwaysAllowPolicy,
+		"write":     alwaysAskPolicy,
+		"get_issue": alwaysAskPolicy,
+	}
 	for i, rawToolset := range request["tools"].([]any) {
 		toolset := rawToolset.(map[string]any)
 		for j, rawConfig := range toolset["configs"].([]any) {
 			config := rawConfig.(map[string]any)
-			want := map[string]any{"type": alwaysAllowPolicy}
+			want := map[string]any{"type": wantPolicies[config["name"].(string)]}
 			if diff := cmp.Diff(want, config["permission_policy"]); diff != "" {
 				t.Errorf("update.tools[%d].configs[%d] permission (-want +got):\n%s", i, j, diff)
 			}
@@ -230,10 +239,9 @@ func TestUpdateParamsGrantEveryDeclaredTool(t *testing.T) {
 	}
 }
 
-// TestDiffReportsConsoleSideToolDenialAsDrift is the KAS-57 negative test: a
-// tool flipped to deny outside kastor must show up as drift naming the
-// attribute, not as a silent no-op plan.
-func TestDiffReportsConsoleSideToolDenialAsDrift(t *testing.T) {
+// TestDiffReportsConsoleSideApprovalChangeAsDrift is KAS-66's negative case:
+// removing a required gate outside kastor is drift, not a silent no-op.
+func TestDiffReportsConsoleSideApprovalChangeAsDrift(t *testing.T) {
 	desired := fullResource(t)
 	stateConfig, err := New().NormalizeStateConfig(desired)
 	if err != nil {
@@ -243,7 +251,7 @@ func TestDiffReportsConsoleSideToolDenialAsDrift(t *testing.T) {
 	remote := loadObject(t, "full_api_response.json")
 	mcpToolset := remote["tools"].([]any)[1].(map[string]any)
 	denied := mcpToolset["configs"].([]any)[0].(map[string]any)
-	denied["permission_policy"] = map[string]any{"type": "always_deny"}
+	denied["permission_policy"] = map[string]any{"type": alwaysAllowPolicy}
 
 	for _, tt := range []struct {
 		name   string
@@ -262,12 +270,12 @@ func TestDiffReportsConsoleSideToolDenialAsDrift(t *testing.T) {
 			}
 
 			old := diffs[0].Old.(map[string]any)["configs"].([]any)[0].(map[string]any)
-			if got := old["permission_policy"]; !cmp.Equal(got, map[string]any{"type": "always_deny"}) {
-				t.Errorf("drift does not report the remote denial: %#v", got)
+			if got := old["permission_policy"]; !cmp.Equal(got, map[string]any{"type": alwaysAllowPolicy}) {
+				t.Errorf("drift does not report the removed remote gate: %#v", got)
 			}
 			want := diffs[0].New.(map[string]any)["configs"].([]any)[0].(map[string]any)
-			if got := want["permission_policy"]; !cmp.Equal(got, map[string]any{"type": alwaysAllowPolicy}) {
-				t.Errorf("drift does not name the grant kastor will restore: %#v", got)
+			if got := want["permission_policy"]; !cmp.Equal(got, map[string]any{"type": alwaysAskPolicy}) {
+				t.Errorf("drift does not name the approval gate kastor will restore: %#v", got)
 			}
 		})
 	}
@@ -289,9 +297,15 @@ func TestDiffAcceptsPreKAS57StateConfigs(t *testing.T) {
 		}
 	}
 
+	remote := loadObject(t, "full_api_response.json")
+	for _, rawToolset := range remote["tools"].([]any) {
+		for _, rawConfig := range rawToolset.(map[string]any)["configs"].([]any) {
+			rawConfig.(map[string]any)["permission_policy"] = map[string]any{"type": alwaysAllowPolicy}
+		}
+	}
 	diffs, err := New().Diff(
 		&provider.Resource{Addr: desired.Addr, Config: legacy},
-		loadObject(t, "full_api_response.json"),
+		remote,
 	)
 	if err != nil {
 		t.Fatalf("Diff pre-KAS-57 state config: %v", err)

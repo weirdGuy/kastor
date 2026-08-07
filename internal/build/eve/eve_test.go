@@ -124,6 +124,24 @@ func TestGenerateMinimalModule(t *testing.T) {
 	}
 }
 
+func TestGenerateAuthoredToolApproval(t *testing.T) {
+	job := loadJob(t, filepath.Join("testdata", "requires_approval"), "eve")
+	files := buildtest.AssertDeterministic(t, eve.Generator{}, job)
+	generated := map[string]string{}
+	for _, file := range files {
+		generated[file.Path] = string(file.Data)
+	}
+
+	gated := generated["helper/agent/tools/publish.ts"]
+	if !strings.Contains(gated, "needsApproval: () => true") {
+		t.Errorf("gated authored tool has no approval gate:\n%s", gated)
+	}
+	ungated := generated["helper/agent/tools/lookup.ts"]
+	if strings.Contains(ungated, "needsApproval") {
+		t.Errorf("ungated authored tool unexpectedly asks for approval:\n%s", ungated)
+	}
+}
+
 // TestGenerateUnbound pins the skip-plus-README decision for blocks no agent
 // references: unbound tools and models are not emitted (a file in eve's
 // tools/ would be auto-wired into the agent), unused prompts become skills.

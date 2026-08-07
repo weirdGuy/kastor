@@ -1,0 +1,6 @@
+agent "weather" {
+  model = model.fast
+  tools = [tool.web_search]
+
+  requires_approval = [model.fast]
+}

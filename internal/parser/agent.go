@@ -20,14 +20,15 @@ type agentFileHCL struct {
 // like model.fast are scope traversals, not string values, and must not be
 // evaluated at parse time.
 type agentHCL struct {
-	Label        string           `hcl:"name,label"`
-	Description  *string          `hcl:"description"`
-	Model        hcl.Expression   `hcl:"model"`
-	SystemPrompt hcl.Expression   `hcl:"system_prompt"`
-	Tools        hcl.Expression   `hcl:"tools,optional"`
-	Inputs       []agentInputHCL  `hcl:"input,block"`
-	Outputs      []agentOutputHCL `hcl:"output,block"`
-	DependsOn    hcl.Expression   `hcl:"depends_on,optional"`
+	Label            string           `hcl:"name,label"`
+	Description      *string          `hcl:"description"`
+	Model            hcl.Expression   `hcl:"model"`
+	SystemPrompt     hcl.Expression   `hcl:"system_prompt"`
+	Tools            hcl.Expression   `hcl:"tools,optional"`
+	RequiresApproval hcl.Expression   `hcl:"requires_approval,optional"`
+	Inputs           []agentInputHCL  `hcl:"input,block"`
+	Outputs          []agentOutputHCL `hcl:"output,block"`
+	DependsOn        hcl.Expression   `hcl:"depends_on,optional"`
 }
 
 // agentInputHCL keeps default as a raw expression because it may be either a
@@ -110,6 +111,21 @@ func decodeAgent(a agentHCL) (*schema.Agent, error) {
 		return nil, err
 	}
 	agent.Tools = tools
+
+	requiresApproval, err := refList(agent.Addr(), "requires_approval", "tool", a.RequiresApproval)
+	if err != nil {
+		return nil, err
+	}
+	granted := make(map[string]bool, len(tools))
+	for _, ref := range tools {
+		granted[ref] = true
+	}
+	for _, ref := range requiresApproval {
+		if !granted[ref] {
+			return nil, fmt.Errorf("%s: requires_approval entry %q must also appear in tools; requires_approval narrows the tools grant and does not grant a tool", agent.Addr(), ref)
+		}
+	}
+	agent.RequiresApproval = requiresApproval
 
 	dependsOn, err := refList(agent.Addr(), "depends_on", "agent", a.DependsOn)
 	if err != nil {

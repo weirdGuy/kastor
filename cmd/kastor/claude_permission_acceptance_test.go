@@ -102,11 +102,10 @@ func retargetAcceptanceMCPServer(t *testing.T, dir string) {
 	t.Logf("acceptance MCP server url set to %q via %s", url, claudeAcceptanceMCPEnv)
 }
 
-// assertAcceptanceToolGrants reads the live agent and checks that every tool
-// in the closure carries the grant. Reading the remote (rather than the
-// request kastor built) is the point: it proves the platform stored the
-// permission instead of applying its own restrictive default.
-func assertAcceptanceToolGrants(t *testing.T, p provider.Provider, id, want string) {
+// assertAcceptanceToolPolicies reads the live agent and checks the exact
+// allow/ask split in the spec. Reading the remote (rather than the request
+// kastor built) proves the platform stored both sides of the policy.
+func assertAcceptanceToolPolicies(t *testing.T, p provider.Provider, id string, want map[string]string) {
 	t.Helper()
 	remote, found, err := p.Read(context.Background(), id)
 	if err != nil {
@@ -120,7 +119,7 @@ func assertAcceptanceToolGrants(t *testing.T, p provider.Provider, id, want stri
 	if !ok || len(tools) == 0 {
 		t.Fatalf("remote agent declares no tools: %#v", remote["tools"])
 	}
-	seen := 0
+	seen := map[string]string{}
 	for i, rawToolset := range tools {
 		toolset := rawToolset.(map[string]any)
 		configs, ok := toolset["configs"].([]any)
@@ -129,23 +128,30 @@ func assertAcceptanceToolGrants(t *testing.T, p provider.Provider, id, want stri
 		}
 		for j, rawConfig := range configs {
 			config := rawConfig.(map[string]any)
-			seen++
+			name := fmt.Sprintf("%v", config["name"])
 			policy, ok := config["permission_policy"].(map[string]any)
 			if !ok {
 				t.Errorf("remote tools[%d].configs[%d] (%v) has no permission_policy: %#v",
 					i, j, config["name"], config)
 				continue
 			}
-			if got := policy["type"]; got != want {
+			got, _ := policy["type"].(string)
+			seen[name] = got
+			if got != want[name] {
 				t.Errorf("remote tools[%d].configs[%d] (%v) permission_policy.type = %v, want %q",
-					i, j, config["name"], got, want)
+					i, j, config["name"], got, want[name])
 			}
 		}
 	}
-	if seen == 0 {
+	if len(seen) == 0 {
 		t.Fatalf("remote agent declares toolsets but no tool configs: %#v", tools)
 	}
-	t.Logf("remote agent %s: %d declared tools carry permission_policy %q", id, seen, want)
+	for name := range want {
+		if _, ok := seen[name]; !ok {
+			t.Errorf("remote agent %s declares no tool named %q: %v", id, name, seen)
+		}
+	}
+	t.Logf("remote agent %s carries the expected tool policies: %v", id, seen)
 }
 
 // assertAcceptanceToolPolicy checks one named tool's live permission, for the
@@ -357,6 +363,110 @@ done:
 		t.Errorf("MCP tool returned is_error; check the server behind %s", claudeAcceptanceMCPEnv)
 	default:
 		t.Logf("MCP tool executed with evaluated_permission=allow and no console edit")
+	}
+}
+
+// assertBuiltinToolPrompts exercises the other half of KAS-66's live
+// acceptance: a tool in requires_approval is offered to the model but parks
+// the session for a human instead of executing unsupervised.
+func assertBuiltinToolPrompts(t *testing.T, agentID, tool string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), acceptanceSessionTimeout)
+	defer cancel()
+	client := acceptanceClient(t)
+
+	stamp := time.Now().UTC().Format("20060102T150405")
+	environment, err := client.Beta.Environments.New(ctx, anthropic.BetaEnvironmentNewParams{
+		Name: "kastor-kas-66-ask-" + stamp,
+		Config: anthropic.BetaEnvironmentNewParamsConfigUnion{
+			OfCloud: &anthropic.BetaCloudConfigParams{
+				Networking: anthropic.BetaCloudConfigParamsNetworkingUnion{
+					OfUnrestricted: &anthropic.BetaUnrestrictedNetworkParam{},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create gated-tool acceptance environment: %v", err)
+	}
+
+	session, err := client.Beta.Sessions.New(ctx, anthropic.BetaSessionNewParams{
+		Agent:         anthropic.BetaSessionNewParamsAgentUnion{OfString: anthropic.String(agentID)},
+		EnvironmentID: environment.ID,
+		Title:         anthropic.String("KAS-66 gated tool acceptance " + stamp),
+	})
+	if err != nil {
+		t.Fatalf("create gated-tool acceptance session: %v", err)
+	}
+	t.Logf("gated session trace: https://platform.claude.com/workspaces/default/sessions/%s", session.ID)
+
+	t.Cleanup(func() {
+		cleanup, cancelCleanup := context.WithTimeout(context.Background(), time.Minute)
+		defer cancelCleanup()
+		if _, err := client.Beta.Sessions.Delete(cleanup, session.ID, anthropic.BetaSessionDeleteParams{}); err != nil {
+			t.Errorf("delete gated-tool acceptance session %s: %v", session.ID, err)
+			return
+		}
+		if _, err := client.Beta.Environments.Delete(cleanup, environment.ID, anthropic.BetaEnvironmentDeleteParams{}); err != nil {
+			t.Errorf("delete gated-tool acceptance environment %s: %v", environment.ID, err)
+		}
+	})
+
+	stream := client.Beta.Sessions.Events.StreamEvents(ctx, session.ID, anthropic.BetaSessionEventStreamParams{})
+	defer stream.Close()
+	prompt := fmt.Sprintf("Call the %q tool exactly once to read /workspace/kastor-kas-66-does-not-exist. Do not use any other tool.", tool)
+	if _, err := client.Beta.Sessions.Events.Send(ctx, session.ID, anthropic.BetaSessionEventSendParams{
+		Events: []anthropic.BetaManagedAgentsEventParamsUnion{{
+			OfUserMessage: &anthropic.BetaManagedAgentsUserMessageEventParams{
+				Type: anthropic.BetaManagedAgentsUserMessageEventParamsTypeUserMessage,
+				Content: []anthropic.BetaManagedAgentsUserMessageEventParamsContentUnion{{
+					OfText: &anthropic.BetaManagedAgentsTextBlockParam{
+						Type: anthropic.BetaManagedAgentsTextBlockTypeText,
+						Text: prompt,
+					},
+				}},
+			},
+		}},
+	}); err != nil {
+		t.Fatalf("send gated-tool acceptance message: %v", err)
+	}
+
+	called, blocked, executed := false, false, false
+	permission := ""
+	for stream.Next() {
+		switch event := stream.Current().AsAny().(type) {
+		case anthropic.BetaManagedAgentsAgentToolUseEvent:
+			if event.Name == tool {
+				called = true
+				permission = string(event.EvaluatedPermission)
+				t.Logf("agent.tool_use %s evaluated_permission=%q", event.Name, permission)
+			}
+		case anthropic.BetaManagedAgentsAgentToolResultEvent:
+			executed = true
+		case anthropic.BetaManagedAgentsSessionErrorEvent:
+			t.Errorf("gated-tool session error: %s", event.Error.Message)
+		case anthropic.BetaManagedAgentsSessionStatusIdleEvent:
+			blocked = event.StopReason.Type == "requires_action"
+			goto done
+		case anthropic.BetaManagedAgentsSessionStatusTerminatedEvent:
+			goto done
+		}
+	}
+done:
+	if err := stream.Err(); err != nil {
+		t.Fatalf("stream gated-tool acceptance events: %v", err)
+	}
+	if !called {
+		t.Fatalf("agent never invoked gated builtin tool %q", tool)
+	}
+	if permission != "ask" {
+		t.Errorf("gated tool evaluated_permission = %q, want \"ask\"", permission)
+	}
+	if !blocked {
+		t.Errorf("gated tool did not park the session with requires_action")
+	}
+	if executed {
+		t.Errorf("gated tool executed before human approval")
 	}
 }
 

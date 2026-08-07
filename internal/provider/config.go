@@ -70,6 +70,9 @@ func DesiredConfig(mod *module.Module, a *schema.Agent, tgt *schema.Target) (Obj
 	if len(tools) > 0 {
 		cfg["tools"] = tools
 	}
+	if len(a.RequiresApproval) > 0 {
+		cfg["requires_approval"] = a.RequiresApproval
+	}
 	if len(servers) > 0 {
 		cfg["mcp_servers"] = servers
 	}
