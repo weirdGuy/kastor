@@ -221,6 +221,9 @@ func permissionDetail(name string, want, got toolPolicy) string {
 		return fmt.Sprintf("the remote agent stops for a human before calling it; the spec grants it unsupervised, "+
 			"so a session with no human attached cannot use %s", name)
 	}
+	if want.policy == alwaysAskPolicy && got.policy == alwaysAllowPolicy {
+		return fmt.Sprintf("the remote agent can call %s without a human, but the spec requires approval; run kastor plan", name)
+	}
 	return fmt.Sprintf("the remote agent's permission for %s was changed outside kastor; run kastor plan", name)
 }
 
@@ -250,10 +253,6 @@ type toolPolicy struct {
 // declaredToolPolicies flattens an agent's toolsets into tool name → policy.
 // It reads both the normalized spec and a raw API response, which carry the
 // same shape here.
-//
-// TODO(KAS-62): the spec side is always always_allow until requires_approval
-// reaches the language; once it does, this comparison starts reporting a tool
-// that should be gated and is not, with no change to its shape.
 func declaredToolPolicies(raw any) (map[string]toolPolicy, error) {
 	policies := map[string]toolPolicy{}
 	if raw == nil {

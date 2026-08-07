@@ -5,6 +5,7 @@ agent "weather" {
   system_prompt = prompt.weather_system
 
   tools = [tool.web_search, tool.geocode]
+  requires_approval = [tool.geocode]
 
   input "location" {
     type        = string

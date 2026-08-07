@@ -150,6 +150,13 @@ func TestLoadErrors(t *testing.T) {
 			},
 		},
 		{
+			name: "approval entry naming a non-existent granted tool is rejected",
+			dir:  "unknown_approval_tool",
+			wantErrs: []string{
+				`agent.agent: agent.writer: unknown reference tool.missing`,
+			},
+		},
+		{
 			name: "output reference to a missing output names the agent",
 			dir:  "unknown_output",
 			wantErrs: []string{

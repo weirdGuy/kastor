@@ -24,6 +24,7 @@ Working today:
 - parse `.agent`, `.tool`, `.prompt`, and `kastor.hcl`
 - validate references and prompt variables
 - build runnable LangGraph and eve projects
+- require human approval for selected tools, portably across LangGraph, eve, and Claude Managed Agents
 - run `kastor plan` / `kastor apply` / `kastor destroy` against the built-in in-memory platform
 - reconcile hosted [Claude Managed Agents](#quickstart-hosted-claude-agents) with `target "claude_agents"`
 - local state file, three-way diffs, and drift detection
@@ -70,7 +71,8 @@ agent "weather" {
 
   model         = model.fast
   system_prompt = prompt.weather_system
-  tools         = [tool.web_search]
+  tools             = [tool.web_search]
+  requires_approval = [tool.web_search]
 
   input "location" {
     type        = string
@@ -89,6 +91,10 @@ agent "weather" {
 ```
 
 The generated code is not the source of truth. The Kastor module is.
+
+`tools` is the grant: omission means the agent cannot call a tool.
+`requires_approval` narrows that grant, so the named tools pause for a human
+while the rest run unsupervised.
 
 ## Quickstart: start your own module
 

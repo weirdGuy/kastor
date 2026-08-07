@@ -56,6 +56,27 @@ func genAgent(a *schema.Agent) ([]byte, error) {
 	b.WriteString("    agent = create_agent(\n")
 	fmt.Fprintf(&b, "        models.%s(),\n", modelName)
 	fmt.Fprintf(&b, "        tools=[%s],\n", strings.Join(toolNames, ", "))
+	if len(a.RequiresApproval) > 0 {
+		b.WriteString("        middleware=[\n")
+		b.WriteString("            HumanInTheLoopMiddleware(\n")
+		b.WriteString("                interrupt_on={\n")
+		for _, ref := range sortedCopy(a.Tools, func(ref string) string { return ref }) {
+			name := pyIdent(strings.TrimPrefix(ref, "tool."))
+			approval := "False"
+			if a.ApprovalRequired(ref) {
+				approval = "True"
+			}
+			fmt.Fprintf(&b, "                    %s: %s,\n", pyString(name), approval)
+		}
+		b.WriteString("                },\n")
+		b.WriteString("            ),\n")
+		b.WriteString("        ],\n")
+		// InMemorySaver is intentional, not a placeholder. Kastor makes no
+		// promise about persisting tool state, and claude_agents supplies
+		// persistence on the platform. A durable checkpointer is a
+		// memory-substrate decision owned by KAS-61, not tool approval.
+		b.WriteString("        checkpointer=InMemorySaver(),\n")
+	}
 	if promptModule != "" {
 		fmt.Fprintf(&b, "        system_prompt=prompts.render(%s.TEMPLATE, variables),\n", promptModule)
 	}
@@ -91,6 +112,10 @@ func writeAgentDoc(b *strings.Builder, a *schema.Agent) {
 
 func writeAgentImports(b *strings.Builder, a *schema.Agent, promptModule string, toolNames []string) {
 	b.WriteString("import json\n\nfrom langchain.agents import create_agent\n")
+	if len(a.RequiresApproval) > 0 {
+		b.WriteString("from langchain.agents.middleware import HumanInTheLoopMiddleware\n")
+		b.WriteString("from langgraph.checkpoint.memory import InMemorySaver\n")
+	}
 	if len(a.Outputs) > 0 {
 		if outputsNeedField(a) {
 			b.WriteString("from pydantic import BaseModel, Field\n")

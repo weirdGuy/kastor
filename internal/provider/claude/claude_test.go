@@ -82,9 +82,13 @@ func TestCreateSendsNormalizedSDKRequest(t *testing.T) {
 			toolset := raw.(map[string]any)
 			for _, rawConfig := range toolset["configs"].([]any) {
 				config := rawConfig.(map[string]any)
+				want := alwaysAskPolicy
+				if config["name"] == "read" {
+					want = alwaysAllowPolicy
+				}
 				policy, ok := config["permission_policy"].(map[string]any)
-				if !ok || policy["type"] != alwaysAllowPolicy {
-					t.Errorf("create request does not grant %v: permission_policy = %#v", config["name"], config["permission_policy"])
+				if !ok || policy["type"] != want {
+					t.Errorf("create request policy for %v = %#v, want %q", config["name"], config["permission_policy"], want)
 				}
 			}
 			if toolset["type"] != mcpToolsetType {

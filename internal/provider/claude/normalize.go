@@ -254,7 +254,7 @@ func normalizeSpec(desired *provider.Resource) (provider.Object, normalizationRu
 		return nil, normalizationRules{}, err
 	}
 
-	tools, mcpServers, err := normalizeSpecTools(desired.Addr, cfg["tools"], cfg["mcp_servers"])
+	tools, mcpServers, err := normalizeSpecTools(desired.Addr, cfg["tools"], cfg["mcp_servers"], cfg["requires_approval"])
 	if err != nil {
 		return nil, normalizationRules{}, err
 	}
@@ -463,8 +463,12 @@ type toolsetBuilder struct {
 // comes from the closure's mcp_servers (from the module's mcp_server blocks,
 // SPEC.md §3.6) — never from the environment, which would make desired state
 // depend on the operator's shell and write a shell-derived value into state.
-func normalizeSpecTools(addr string, raw, rawServers any) ([]any, []any, error) {
+func normalizeSpecTools(addr string, raw, rawServers, rawApprovals any) ([]any, []any, error) {
 	neutral, err := arrayValue(raw, addr+".tools")
+	if err != nil {
+		return nil, nil, err
+	}
+	requiresApproval, err := specApprovalSet(addr, rawApprovals)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -486,6 +490,7 @@ func normalizeSpecTools(addr string, raw, rawServers any) ([]any, []any, error) 
 			return nil, nil, err
 		}
 		blockAddr := "tool." + name
+		gated := requiresApproval[blockAddr]
 		source, ok := tool["source"].(map[string]any)
 		if !ok {
 			return nil, nil, fmt.Errorf("%s: source must be an object", blockAddr)
@@ -506,7 +511,7 @@ func normalizeSpecTools(addr string, raw, rawServers any) ([]any, []any, error) 
 				groups["builtin"] = group
 				tools = append(tools, group.object)
 			}
-			group.configs = append(group.configs, enabledTool(name))
+			group.configs = append(group.configs, enabledTool(name, gated))
 		case "mcp":
 			uri, err := requiredString(source["uri"], blockAddr+".source.uri")
 			if err != nil {
@@ -538,7 +543,7 @@ func normalizeSpecTools(addr string, raw, rawServers any) ([]any, []any, error) 
 					"url":  declaration.url,
 				})
 			}
-			group.configs = append(group.configs, enabledTool(toolName))
+			group.configs = append(group.configs, enabledTool(toolName, gated))
 		case "http", "script", "runtime":
 			return nil, nil, unsupportedToolKind(blockAddr, kind)
 		default:
@@ -557,6 +562,25 @@ func normalizeSpecTools(addr string, raw, rawServers any) ([]any, []any, error) 
 		mcpServers = []any{}
 	}
 	return tools, mcpServers, nil
+}
+
+func specApprovalSet(addr string, raw any) (map[string]bool, error) {
+	values, err := arrayValue(raw, addr+".requires_approval")
+	if err != nil {
+		return nil, err
+	}
+	set := make(map[string]bool, len(values))
+	for i, value := range values {
+		ref, err := requiredString(value, fmt.Sprintf("%s.requires_approval[%d]", addr, i))
+		if err != nil {
+			return nil, err
+		}
+		if !strings.HasPrefix(ref, "tool.") || strings.TrimPrefix(ref, "tool.") == "" {
+			return nil, fmt.Errorf("%s.requires_approval[%d] is %q, expected tool.<name>", addr, i, ref)
+		}
+		set[ref] = true
+	}
+	return set, nil
 }
 
 func newToolset(typ, server string) *toolsetBuilder {
@@ -601,15 +625,15 @@ func normalizeSpecToolsetDefaults(tools []any) []any {
 // is stated on the request instead of inherited. Leaving it unset is what
 // deploys agents that cannot call any of the tools they declare — the platform
 // reads an absent permission as a denial.
-//
-// TODO(KAS-62): allow is hardcoded here. Making the permission configurable in
-// the spec is that ticket's design pass; until then every declared tool is
-// allowed, deliberately rather than by omission.
-func enabledTool(name string) map[string]any {
+func enabledTool(name string, requiresApproval bool) map[string]any {
+	policy := alwaysAllowPolicy
+	if requiresApproval {
+		policy = alwaysAskPolicy
+	}
 	return map[string]any{
 		"name":              name,
 		"enabled":           true,
-		"permission_policy": map[string]any{"type": alwaysAllowPolicy},
+		"permission_policy": map[string]any{"type": policy},
 	}
 }
 

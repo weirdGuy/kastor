@@ -57,7 +57,8 @@ func TestDesiredConfig(t *testing.T) {
 					"id":       "gpt-4o-mini",
 					"params":   map[string]any{"temperature": 0.2, "max_tokens": float64(4096)},
 				},
-				"instructions": "You are a weather assistant for {{location}}.\n",
+				"instructions":      "You are a weather assistant for {{location}}.\n",
+				"requires_approval": []any{"tool.web_search"},
 				// The MCP tool drags its server's connection config into the
 				// closure: on the platform path apply is the deployment, so
 				// the address comes from the spec (SPEC.md §3.6).

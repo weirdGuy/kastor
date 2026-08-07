@@ -242,7 +242,10 @@ func TestCheckToolPermissions(t *testing.T) {
 	t.Run("a gated tool the spec grants unsupervised", func(t *testing.T) {
 		remote := remoteWith(func(configs []any) {
 			for _, raw := range configs {
-				raw.(map[string]any)["permission_policy"] = map[string]any{"type": alwaysAskPolicy}
+				config := raw.(map[string]any)
+				if config["name"] == "read" {
+					config["permission_policy"] = map[string]any{"type": alwaysAskPolicy}
+				}
 			}
 		})
 		p := checkerProvider(testVaultID, vaultHolding(&vaultCredential{ID: testCredID, MCPServerURL: testServerURL}))
@@ -250,9 +253,15 @@ func TestCheckToolPermissions(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Check: %v", err)
 		}
-		got := findCheck(t, checks, checkToolPermission)
+		var got provider.Check
+		for _, check := range checks {
+			if check.Kind == checkToolPermission && check.Subject == "read" {
+				got = check
+				break
+			}
+		}
 		if got.Status != provider.StatusFailed {
-			t.Errorf("status = %q, want failed", got.Status)
+			t.Errorf("read status = %q, want failed", got.Status)
 		}
 		for _, want := range []string{alwaysAskPolicy, alwaysAllowPolicy} {
 			if !strings.Contains(got.Summary, want) {
@@ -261,6 +270,38 @@ func TestCheckToolPermissions(t *testing.T) {
 		}
 		if !strings.Contains(got.Detail, "no human attached") {
 			t.Errorf("detail = %q, want it to say what the gate costs", got.Detail)
+		}
+	})
+
+	t.Run("an approval gate removed outside kastor", func(t *testing.T) {
+		remote := remoteWith(func(configs []any) {
+			for _, raw := range configs {
+				config := raw.(map[string]any)
+				if config["name"] == "write" {
+					config["permission_policy"] = map[string]any{"type": alwaysAllowPolicy}
+				}
+			}
+		})
+		p := checkerProvider(testVaultID, vaultHolding(&vaultCredential{ID: testCredID, MCPServerURL: testServerURL}))
+		checks, err := p.Check(context.Background(), fullResource(t), remote)
+		if err != nil {
+			t.Fatalf("Check: %v", err)
+		}
+		var got provider.Check
+		for _, check := range checks {
+			if check.Kind == checkToolPermission && check.Subject == "write" {
+				got = check
+				break
+			}
+		}
+		if got.Status != provider.StatusFailed {
+			t.Fatalf("write status = %q, want failed: %+v", got.Status, checks)
+		}
+		for _, want := range []string{alwaysAllowPolicy, alwaysAskPolicy, "without a human", "requires approval"} {
+			text := got.Summary + " " + got.Detail
+			if !strings.Contains(text, want) {
+				t.Errorf("check text %q does not contain %q", text, want)
+			}
 		}
 	})
 

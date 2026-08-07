@@ -1,0 +1,6 @@
+agent "writer" {
+  model = model.fast
+  tools = [tool.missing]
+
+  requires_approval = [tool.missing]
+}

@@ -23,11 +23,12 @@ func TestParseAgentFile(t *testing.T) {
 			file: "valid_full.agent",
 			want: []*schema.Agent{
 				{
-					Name:         "weather",
-					Description:  "Answers weather questions for a location and date",
-					Model:        "model.fast",
-					SystemPrompt: "prompt.weather_system",
-					Tools:        []string{"tool.web_search", "tool.geocode"},
+					Name:             "weather",
+					Description:      "Answers weather questions for a location and date",
+					Model:            "model.fast",
+					SystemPrompt:     "prompt.weather_system",
+					Tools:            []string{"tool.web_search", "tool.geocode"},
+					RequiresApproval: []string{"tool.geocode"},
 					Inputs: []*schema.AgentInput{
 						{Name: "location", Type: "string", Description: "The location to get the weather for"},
 						{Name: "date", Type: "string", Optional: true},
@@ -125,6 +126,21 @@ func TestParseAgentFile(t *testing.T) {
 			name:    "duplicate tool references are rejected",
 			file:    "invalid_dup_tool_ref.agent",
 			wantErr: `agent.weather: tools: "tool.web_search" listed more than once`,
+		},
+		{
+			name:    "approval entry must be granted by tools",
+			file:    "invalid_approval_not_granted.agent",
+			wantErr: `agent.weather: requires_approval entry "tool.geocode" must also appear in tools`,
+		},
+		{
+			name:    "duplicate approval references are rejected",
+			file:    "invalid_dup_approval_ref.agent",
+			wantErr: `agent.weather: requires_approval: "tool.web_search" listed more than once`,
+		},
+		{
+			name:    "approval entry must be a tool reference",
+			file:    "invalid_approval_ref_kind.agent",
+			wantErr: `agent.weather: requires_approval element must be a reference like tool.<name>, got "model.fast"`,
 		},
 		{
 			name:    "duplicate input names are rejected",

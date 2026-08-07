@@ -83,11 +83,16 @@ func TestClaudeManagedAgentsAcceptance(t *testing.T) {
 
 	// 1b. Create states the tool permission (KAS-57): every tool in the agent
 	// closure is granted on the remote object, without a console edit.
-	assertAcceptanceToolGrants(t, realProvider, resource.ID, acceptanceAllowPolicy)
+	acceptancePolicies := map[string]string{
+		"read":              acceptanceGatedPolicy,
+		acceptanceMCPTool(): acceptanceAllowPolicy,
+	}
+	assertAcceptanceToolPolicies(t, realProvider, resource.ID, acceptancePolicies)
 
 	// 1c. The grant is only worth anything if the agent can use it, so run one
 	// live turn and watch the platform evaluate the MCP call.
 	assertMCPToolIsCallable(t, resource.ID)
+	assertBuiltinToolPrompts(t, resource.ID, "read")
 
 	// 1d. doctor against the live agent (KAS-63). The acceptance module's
 	// server declares no auth, so what this covers is the other half: the
@@ -98,6 +103,8 @@ func TestClaudeManagedAgentsAcceptance(t *testing.T) {
 	assertOutputContains(t, out,
 		claudeAcceptanceAddr,
 		"remote object exists",
+		`tool is granted with permission "always_allow"`,
+		`tool is granted with permission "always_ask"`,
 		"is ready",
 	)
 	if strings.Contains(out, "could not be verified") {
@@ -173,7 +180,7 @@ func TestClaudeManagedAgentsAcceptance(t *testing.T) {
 	assertOutputContains(t, out,
 		"Applied target.claude_agents: 0 created, 1 updated, 0 deleted.",
 	)
-	assertAcceptanceToolGrants(t, realProvider, resource.ID, acceptanceAllowPolicy)
+	assertAcceptanceToolPolicies(t, realProvider, resource.ID, acceptancePolicies)
 	out = runAcceptanceCLI(t, "plan", dir)
 	assertOutputContains(t, out,
 		"No changes for target.claude_agents: remote matches the spec (1 resource).",
