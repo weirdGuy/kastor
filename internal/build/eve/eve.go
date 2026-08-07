@@ -291,7 +291,7 @@ func (pb *projectBuilder) emitAgentDir(a *schema.Agent, dir, parent string, orde
 		pb.add(path, data)
 	}
 
-servers, err := groupMCPServers(mcpTools, a, pb.idx.mcpServers, pb.idx.targetAddr)
+	servers, err := groupMCPServers(mcpTools, a, pb.idx.mcpServers, pb.idx.targetAddr)
 	if err != nil {
 		return err
 	}
