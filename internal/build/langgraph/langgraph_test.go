@@ -156,6 +156,76 @@ func TestGenerateRuntimeToolIsPreserved(t *testing.T) {
 	}
 }
 
+// generatedFile returns one generated file's contents, failing if the
+// generator did not emit it.
+func generatedFile(t *testing.T, files []build.File, path string) string {
+	t.Helper()
+	for _, f := range files {
+		if f.Path == path {
+			return string(f.Data)
+		}
+	}
+	t.Fatalf("generator did not emit %s", path)
+	return ""
+}
+
+// TestGenerateMCPConfigHoldsNoCredential pins the split SPEC.md §3.3 draws
+// through the generated project: mcp_servers.json is connection config and
+// nothing else — no credential value and no auth.ref — while the ref's
+// *variable name* lives in the bridge, which reads it in the user's own
+// process at call time. A ref in the config file would be the same defect
+// state-file-side §5.1 forbids, one directory over.
+func TestGenerateMCPConfigHoldsNoCredential(t *testing.T) {
+	job := loadJob(t, filepath.Join("..", "..", "..", "examples", "weather"), "langgraph")
+	files := buildtest.AssertDeterministic(t, langgraph.Generator{}, job)
+
+	config := generatedFile(t, files, "mcp_servers.json")
+	for _, want := range []string{`"search-server"`, `"streamable_http"`, `"https://mcp.tavily.com/mcp"`, "Do not edit"} {
+		if !strings.Contains(config, want) {
+			t.Errorf("mcp_servers.json missing %q:\n%s", want, config)
+		}
+	}
+	// The whole point: the ref, its scheme, and the variable it names are
+	// all absent from the file, and so is any header the bridge builds.
+	for _, forbidden := range []string{"env://", "auth", "TAVILY_API_KEY", "Authorization", "Bearer"} {
+		if strings.Contains(config, forbidden) {
+			t.Errorf("mcp_servers.json contains %q — connection config only (SPEC.md §3.3):\n%s", forbidden, config)
+		}
+	}
+
+	// The auth wiring is a server → variable-name map in the bridge.
+	support := generatedFile(t, files, "mcp_support.py")
+	for _, want := range []string{`"search-server": "TAVILY_API_KEY"`, "os.environ.get(variable)", "Bearer"} {
+		if !strings.Contains(support, want) {
+			t.Errorf("mcp_support.py missing %q:\n%s", want, support)
+		}
+	}
+	if strings.Contains(support, "env://TAVILY_API_KEY\"") {
+		t.Error("mcp_support.py stores the ref rather than the variable it names")
+	}
+}
+
+// TestGenerateMCPConfigStdio pins the other transport: a stdio server is
+// spawned by the generated project, so its config carries command and args
+// and no url — and it takes no auth, having inherited the environment.
+func TestGenerateMCPConfigStdio(t *testing.T) {
+	job := loadJob(t, filepath.Join("testdata", "stdio_server"), "dev")
+	files := buildtest.AssertDeterministic(t, langgraph.Generator{}, job)
+
+	config := generatedFile(t, files, "mcp_servers.json")
+	for _, want := range []string{`"fetch"`, `"transport": "stdio"`, `"command": "uvx"`, `"args": ["mcp-server-fetch"]`} {
+		if !strings.Contains(config, want) {
+			t.Errorf("mcp_servers.json missing %q:\n%s", want, config)
+		}
+	}
+	if strings.Contains(config, `"url"`) {
+		t.Errorf("stdio server config carries a url:\n%s", config)
+	}
+	if support := generatedFile(t, files, "mcp_support.py"); !strings.Contains(support, "_AUTH_ENV: dict[str, str] = {}") {
+		t.Errorf("unauthenticated module did not emit an empty auth map:\n%s", support)
+	}
+}
+
 // TestGenerateErrors covers the specs the langgraph target must reject:
 // each fixture is a valid Kastor module that has no langgraph mapping.
 func TestGenerateErrors(t *testing.T) {

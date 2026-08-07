@@ -25,15 +25,15 @@ func runCmd(t *testing.T, args ...string) (string, error) {
 	return out.String(), err
 }
 
-// scaffoldFilenames is every file kastor init creates, the contract the
-// ticket names: project file, one agent, one tool, one prompt, plus the MCP
-// runtime config the tool needs and a README.
+// scaffoldFilenames is every file kastor init creates: project file, one
+// agent, one tool, one prompt, and a README. The MCP server the tool binds
+// is an mcp_server block in the project file, not a hand-maintained
+// mcp_servers.json — the build generates that (SPEC.md §3.3).
 var scaffoldFilenames = []string{
 	"kastor.hcl",
 	"researcher.agent",
 	"fetch_url.tool",
 	"researcher_system.prompt",
-	"mcp_servers.json",
 	"README.md",
 }
 
@@ -120,7 +120,7 @@ func TestInitCommandScaffoldWorks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("init Execute() error = %v\noutput:\n%s", err, out)
 	}
-	if !strings.Contains(out, "Scaffolded a new module: 6 files") {
+	if !strings.Contains(out, "Scaffolded a new module: 5 files") {
 		t.Errorf("output missing scaffold summary:\n%s", out)
 	}
 	for _, f := range scaffoldFilenames {
@@ -147,6 +147,10 @@ func TestInitCommandScaffoldWorks(t *testing.T) {
 	for _, f := range []string{
 		filepath.Join("agents", "researcher.py"),
 		filepath.Join("tools", "fetch_url.py"),
+		// The connection config the scaffold no longer ships by hand: the
+		// build derives it from the mcp_server "fetch" block (SPEC.md §3.3),
+		// so the scaffold runs with nothing to configure.
+		"mcp_servers.json",
 	} {
 		if _, err := os.Stat(filepath.Join(dir, "gen", "langgraph", f)); err != nil {
 			t.Errorf("expected generated file %s: %v", f, err)

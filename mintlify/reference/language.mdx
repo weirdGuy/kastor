@@ -138,13 +138,13 @@ Rules:
 - A param has no `optional` attribute. Give it a `default` instead — that is what makes it optional at call time. Agent `input` blocks are the ones with `optional`; tool params are not the same shape.
 - `default = null` is invalid. Omit the attribute instead.
 - A mismatch between a `default` and its declared `type` is a compile error.
-- For `mcp` sources the `uri` pins identity only: `mcp://<server>/<tool>` names the server and the tool on it, nothing more. Transport and connection details are deployment configuration, not spec. Generated projects read them from `mcp_servers.json` (or the path in `KASTOR_MCP_CONFIG`); the `claude_agents` provider reads `KASTOR_MCP_<SERVER>_URL`.
+- For `mcp` sources the `uri` names a declared server and a tool on it: `mcp://<server>/<tool>`, where `<server>` must match an [`mcp_server` block](#mcp_server) in the module. An unknown server is a compile error naming the file, the tool's block address, and the servers the module declares. The `<tool>` segment is the server's own name for the tool and is not checkable without contacting the server, so a mismatch surfaces at run time.
 
 Source kinds. Every kind parses; what a kind means is decided by the target that consumes it.
 
 | Kind | LangGraph codegen | `claude_agents` platform |
 | --- | --- | --- |
-| `mcp` | Generated MCP binding. | Supported: an `mcp_toolset` entry plus an endpoint from `KASTOR_MCP_<SERVER>_URL`. |
+| `mcp` | Generated MCP binding, configured from the tool's `mcp_server` block. | Supported: an `mcp_toolset` entry plus the server's name and URL from its `mcp_server` block. |
 | `http` | POST wrapper. | Error — wrap it in an MCP server instead. |
 | `runtime` | Stub for user code. The stub is generated once: after you edit it, later builds keep your file, and a spec change arrives as a `<name>.kastor-new` sidecar to reconcile. | Error — wrap it in an MCP server instead. |
 | `builtin` | Codegen error, permanently: a platform-provided tool has no local binding. | Supported for the hosted toolset (`bash`, `edit`, `glob`, `grep`, `read`, `web_fetch`, `web_search`, `write`). |
@@ -186,7 +186,7 @@ If `requires` is omitted, Kastor infers variables from the body. If `requires` i
 
 ## `kastor.hcl` and `*.kastor`
 
-Project files contain `model` and `target` blocks.
+Project files contain `model`, `target`, and `mcp_server` blocks.
 
 ```hcl
 model "fast" {
@@ -206,6 +206,14 @@ target "langgraph" {
 
 target "memory" {
   type = "platform"
+}
+
+mcp_server "search-server" {
+  url = "https://mcp.tavily.com/mcp"
+
+  auth {
+    ref = "env://TAVILY_API_KEY"
+  }
 }
 ```
 
@@ -236,6 +244,7 @@ The `eve` target routes every model through the Vercel AI Gateway, so it needs `
 | `type` | required | `codegen` or `platform`. |
 | `output` | `codegen` only | Output directory for generated code. Required on `codegen`, an error on `platform`. |
 | `auth` | `platform` only | Optional on `platform`, an error on `codegen`. Currently supports `api_key_env`. |
+| `vault_id` | `claude_agents` only | The Anthropic vault (`vlt_…`) holding the credentials this target's MCP servers reference. Required when any server bound here carries a `connection://` ref, an error on every other target. It names a location, not a secret: `plan` and `apply` never read it, and only `kastor doctor` does. |
 
 Rules:
 
@@ -250,6 +259,77 @@ Target labels select implementations:
 - `target "claude_agents"` selects the Claude Managed Agents provider. Its `auth` block defaults to `api_key_env = "ANTHROPIC_API_KEY"`; see [platform providers](/reference/cli#platform-providers) for what it does and does not accept.
 
 A label with no registered generator or provider is an error naming the ones that exist.
+
+### `mcp_server`
+
+An MCP server the module's tools bind to. Declaring the server is what makes `mcp://<server>/<tool>` resolvable — an undeclared one is a compile error, not a runtime failure.
+
+```hcl
+# Remote server; the credential is in the environment
+mcp_server "airtable" {
+  url = "https://mcp.airtable.com/mcp"
+
+  auth {
+    ref = "env://AIRTABLE_TOKEN"
+  }
+}
+
+# Local server, spawned by the generated project
+mcp_server "fetch" {
+  transport = "stdio"
+  command   = "uvx"
+  args      = ["mcp-server-fetch"]
+}
+```
+
+| Field | Status | Notes |
+| --- | --- | --- |
+| `transport` | optional | `http` (default) or `stdio`. Unknown values are compile errors. |
+| `url` | `http` only | The server's endpoint. Required on `http`, an error on `stdio`. |
+| `command` | `stdio` only | The executable to spawn. Required on `stdio`, an error on `http`. |
+| `args` | `stdio` only | List of string, default `[]`. |
+| `auth` | `http` only | Optional. A server without one is unauthenticated on every target; `stdio` allows none, since a spawned process inherits the environment that spawned it. |
+
+Transport support is per target:
+
+| `transport` | `langgraph` | `eve` | `claude_agents` |
+| --- | --- | --- | --- |
+| `http` | Supported. | Supported. | Supported. |
+| `stdio` | Supported — spawned by the generated project. | Error — the connection is an HTTP client; a stdio-only server needs an HTTP bridge in front of it. | Error — the platform dials a URL. |
+
+**Credential references.** `auth.ref` is a URI naming *where a credential lives*, never the credential. The scheme set is closed in v0, and an unknown scheme is a compile error listing the known ones.
+
+| Scheme | Meaning | `langgraph` | `eve` | `claude_agents` |
+| --- | --- | --- | --- | --- |
+| `env://NAME` | The value of environment variable `NAME`, read by whatever dials the server. | Supported — the generated bridge sends `Authorization: Bearer` from `NAME` at call time. | Supported — the same, from the connection's headers callback. | Error — the platform's agent object accepts no credential; use `connection://`. |
+| `connection://<credential_id>` | A credential the target platform already holds, authenticated out of band. | Error — no platform holds connections on the codegen path. | Error. | Supported — kastor sends the server's name and URL only. |
+
+Kastor is never the credential holder: it implements no OAuth flow, stores no token, and refreshes nothing. Each supported (scheme, target) pair is resolve-free by construction, and the rejected pairs are exactly the ones that would force kastor to read a secret and transmit it. State records the ref, never the resolved value — so changing `env://A` to `env://B` is a visible diff, while rotating the secret behind `env://A` is invisible to kastor.
+
+An `auth` block may declare `targets`, a list of `target.<name>` references, exactly as a tool's `source` block does. A block without `targets` is the server's default. This is not an optimization: `env://` is codegen-only and `connection://` is platform-only, so a module targeting both paths cannot express an authenticated server without it.
+
+```hcl
+mcp_server "hubspot" {
+  url = "https://mcp.hubspot.com"
+
+  auth {
+    ref     = "connection://cred_011CZkZDLs7fYzm1hXNPeRjv"
+    targets = [target.claude_agents]
+  }
+
+  auth {
+    ref     = "env://HUBSPOT_TOKEN"
+    targets = [target.langgraph, target.eve]
+  }
+}
+```
+
+Rules:
+
+- Two `auth` blocks naming the same target is an error, as is more than one default. Once a server declares any `auth` block, every target it is bound on must have a binding — otherwise a server picks up authentication on one path and silently loses it on another.
+- Like `target.<name>`, the server segment of an `mcp://` uri is resolved and validated but creates no graph edge: MCP servers are not nodes in the agent graph.
+- A declared server no tool references is not an error, the same as an unreferenced `model`. A platform is sent only the servers an agent's tools actually bind.
+- The `langgraph` target generates `mcp_servers.json` from these blocks — a generated artifact like every other file it writes. It holds connection config only: a credential value never appears in it, and neither does an `auth.ref`.
 
 ## File discovery
 

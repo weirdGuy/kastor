@@ -44,12 +44,14 @@ or use the value from the message.
 
 ## MCP servers
 
-The spec pins tool identity only (`mcp://<server>/<tool>`); each connection
-file allow-lists exactly the pinned tools and reads its endpoint URL — a
-Streamable HTTP or SSE endpoint — from the environment. A stdio-only local
-server needs an HTTP bridge in front of it.
+Each connection file allow-lists exactly the tools the spec pinned
+(`mcp://<server>/<tool>`) and dials the url its `mcp_server` block declares.
+A stdio-only local server needs an HTTP bridge in front of it.
 
-- server `search-server`: set `KASTOR_MCP_SEARCH_SERVER_URL` (tools: `tavily_search`; from tool.web_search)
+- server `search-server` at `https://mcp.tavily.com/mcp` (tools: `tavily_search`; from tool.web_search)
 
-Hosted endpoints often embed credentials in the URL, so keep these variables
-in deployment config (e.g. `.env.local`), never in version control.
+Credentials are referenced, never held: kastor writes no token into this
+project and stores none. Set these in the environment the agent runs in
+(e.g. `.env.local`), never in version control:
+
+- server `search-server`: set `TAVILY_API_KEY` (auth ref `env://TAVILY_API_KEY`)

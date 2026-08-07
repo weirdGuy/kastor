@@ -49,7 +49,7 @@
     "block": {
       "comment": "Every block type in the language. A block type is only a block type when a brace follows, so `output` in `agent.x.output.y` is untouched.",
       "name": "meta.block.kastor",
-      "begin": "\\b(agent|tool|model|target|input|output|param|params|returns|source|auth)\\b((?:\\s+\"[^\"]*\")*)\\s*(\\{)",
+      "begin": "\\b(agent|tool|model|target|mcp_server|input|output|param|params|returns|source|auth)\\b((?:\\s+\"[^\"]*\")*)\\s*(\\{)",
       "end": "\\}",
       "beginCaptures": {
         "1": { "name": "entity.name.type.kastor" },
@@ -81,6 +81,8 @@
         { "include": "#type-keyword" },
         { "include": "#source-kind" },
         { "include": "#target-type" },
+        { "include": "#mcp-transport" },
+        { "include": "#credential-ref" },
         { "include": "#attribute-definition" }
       ]
     },
@@ -119,6 +121,32 @@
       }
     },
 
+    "mcp-transport": {
+      "comment": "SPEC.md 3.6: closed enum, defaulting to http. A typo stays an ordinary string, which is a free hint before `kastor validate` runs.",
+      "match": "\\b(transport)\\s*(=)\\s*(\")(http|stdio)(\")",
+      "captures": {
+        "1": { "name": "variable.other.readwrite.kastor" },
+        "2": { "name": "keyword.operator.assignment.kastor" },
+        "3": { "name": "punctuation.definition.string.begin.kastor" },
+        "4": { "name": "support.constant.kastor" },
+        "5": { "name": "punctuation.definition.string.end.kastor" }
+      }
+    },
+
+    "credential-ref": {
+      "comment": "SPEC.md 3.6: auth.ref names where a credential lives, never the credential. The scheme set is closed, so only the scheme is highlighted — the value after it is an opaque id or variable name.",
+      "match": "\\b(ref)\\s*(=)\\s*(\")(env|connection)(://)([^\"]*)(\")",
+      "captures": {
+        "1": { "name": "variable.other.readwrite.kastor" },
+        "2": { "name": "keyword.operator.assignment.kastor" },
+        "3": { "name": "punctuation.definition.string.begin.kastor" },
+        "4": { "name": "support.constant.kastor" },
+        "5": { "name": "keyword.operator.accessor.kastor" },
+        "6": { "name": "string.quoted.double.kastor" },
+        "7": { "name": "punctuation.definition.string.end.kastor" }
+      }
+    },
+
     "attribute-definition": {
       "name": "variable.declaration.kastor",
       "match": "\\b(?!null\\b|true\\b|false\\b)([A-Za-z_][A-Za-z0-9_-]*)\\s*(=)(?!=)",
@@ -140,7 +168,7 @@
 
     "reference": {
       "comment": "SPEC.md 4: references build the DAG. The root gets its own scope because references are what distinguishes Kastor from plain HCL.",
-      "match": "\\b(model|prompt|tool|agent)(\\.)([A-Za-z_][A-Za-z0-9_-]*)((?:\\.[A-Za-z_][A-Za-z0-9_-]*)*)",
+      "match": "\\b(model|prompt|tool|agent|target|mcp_server)(\\.)([A-Za-z_][A-Za-z0-9_-]*)((?:\\.[A-Za-z_][A-Za-z0-9_-]*)*)",
       "captures": {
         "1": { "name": "support.class.kastor" },
         "2": { "name": "keyword.operator.accessor.kastor" },
