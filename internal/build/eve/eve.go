@@ -20,8 +20,9 @@
 //
 // Tool source.kind mapping:
 //
-//	mcp     → connections/<server>.ts allow-listing the pinned tool; the
-//	          endpoint URL is deployment config (KASTOR_MCP_<SERVER>_URL)
+//	mcp     → connections/<server>.ts allow-listing the pinned tool, at the
+//	          url its mcp_server block declares; an env:// credential is read
+//	          in the headers callback at first contact (SPEC.md §3.6)
 //	http    → tools/t.ts: defineTool + Zod schema POSTing params to the uri
 //	runtime → tools/t.ts: defineTool + Zod schema, execute throws until the
 //	          user supplies the body
@@ -58,7 +59,7 @@ var _ build.Generator = Generator{}
 // generates nothing: an eve project is an agent, so there is no scaffold to
 // emit without one.
 func (Generator) Generate(job *build.Job) ([]build.File, error) {
-	idx := buildIndex(job.Module)
+	idx := buildIndex(job.Module, job.Target.Addr())
 	var files []build.File
 	for _, root := range rootAgents(job.Module) {
 		pfiles, err := emitProject(idx, root)
@@ -70,24 +71,33 @@ func (Generator) Generate(job *build.Job) ([]build.File, error) {
 	return files, nil
 }
 
-// index resolves block references by name across the module.
+// index resolves block references by name across the module. targetAddr is
+// the eve target being generated, which selects each MCP server's per-target
+// auth binding (SPEC.md §3.6).
 type index struct {
-	agents  map[string]*schema.Agent
-	tools   map[string]*schema.Tool
-	prompts map[string]*schema.Prompt
-	models  map[string]*schema.Model
+	agents     map[string]*schema.Agent
+	tools      map[string]*schema.Tool
+	prompts    map[string]*schema.Prompt
+	models     map[string]*schema.Model
+	mcpServers map[string]*schema.MCPServer
+	targetAddr string
 
 	unusedPrompts []*schema.Prompt // not any agent's system_prompt; sorted
 	unboundTools  []*schema.Tool   // referenced by no agent; sorted
 	unboundModels []*schema.Model  // referenced by no agent; sorted
 }
 
-func buildIndex(mod *module.Module) *index {
+func buildIndex(mod *module.Module, targetAddr string) *index {
 	idx := &index{
-		agents:  map[string]*schema.Agent{},
-		tools:   map[string]*schema.Tool{},
-		prompts: map[string]*schema.Prompt{},
-		models:  map[string]*schema.Model{},
+		agents:     map[string]*schema.Agent{},
+		tools:      map[string]*schema.Tool{},
+		prompts:    map[string]*schema.Prompt{},
+		models:     map[string]*schema.Model{},
+		mcpServers: map[string]*schema.MCPServer{},
+		targetAddr: targetAddr,
+	}
+	for _, s := range mod.MCPServers {
+		idx.mcpServers[s.Name] = s
 	}
 	for _, a := range mod.Agents {
 		idx.agents[a.Name] = a
@@ -281,7 +291,7 @@ func (pb *projectBuilder) emitAgentDir(a *schema.Agent, dir, parent string, orde
 		pb.add(path, data)
 	}
 
-	servers, err := groupMCPServers(mcpTools, a)
+servers, err := groupMCPServers(mcpTools, a, pb.idx.mcpServers, pb.idx.targetAddr)
 	if err != nil {
 		return err
 	}
@@ -307,7 +317,7 @@ func (pb *projectBuilder) emitAgentDir(a *schema.Agent, dir, parent string, orde
 func (pb *projectBuilder) mergeServer(s *mcpServer) {
 	merged := pb.servers[s.Name]
 	if merged == nil {
-		merged = &mcpServer{Name: s.Name}
+		merged = &mcpServer{Name: s.Name, Decl: s.Decl, AuthEnv: s.AuthEnv}
 		pb.servers[s.Name] = merged
 	}
 	for _, t := range s.Tools {

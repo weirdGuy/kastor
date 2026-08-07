@@ -27,3 +27,21 @@ target "langgraph" {
 # ^^^^ entity.name.type.kastor
     api_key_env = "ANTHROPIC_API_KEY"
 #   ^^^^^^^^^^^ variable.other.readwrite.kastor
+mcp_server "hubspot" {
+# <- entity.name.type.kastor
+#^^^^^^^^^ entity.name.type.kastor
+#           ^^^^^^^ variable.other.enummember.kastor
+  transport = "http"
+#              ^^^^ support.constant.kastor
+  url       = "https://mcp.hubspot.com"
+# ^^^ variable.other.readwrite.kastor
+  auth {
+# ^^^^ entity.name.type.kastor
+    ref     = "connection://cred_011CZkZDLs7fYzm1hXNPeRjv"
+#   ^^^ variable.other.readwrite.kastor
+#              ^^^^^^^^^^ support.constant.kastor
+#                        ^^^ keyword.operator.accessor.kastor
+    targets = [target.langgraph]
+#              ^^^^^^ support.class.kastor
+#                    ^ keyword.operator.accessor.kastor
+#                     ^^^^^^^^^ variable.other.member.kastor

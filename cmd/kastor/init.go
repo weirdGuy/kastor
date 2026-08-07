@@ -31,7 +31,7 @@ func newInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init [--target name] [--force] [dir]",
 		Short: "Scaffold a new Kastor module",
-		Long:  "init writes a minimal working module — kastor.hcl, one agent, one MCP tool, one prompt, MCP runtime config, and a README — into dir (default: the current directory), creating it if missing. The scaffold passes kastor validate and kastor build with zero edits. A directory already holding visible files is refused unless --force, which overwrites the scaffold's own file names and leaves everything else in place.",
+		Long:  "init writes a minimal working module — kastor.hcl (model, codegen target, and the MCP server the tool binds), one agent, one MCP tool, one prompt, and a README — into dir (default: the current directory), creating it if missing. The scaffold passes kastor validate and kastor build with zero edits. A directory already holding visible files is refused unless --force, which overwrites the scaffold's own file names and leaves everything else in place.",
 		Args:  usageMaxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."

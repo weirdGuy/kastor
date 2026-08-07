@@ -59,6 +59,30 @@ v0 exit criteria KAS-36 are met.
   and the platform path. `target "claude_agents"` gains `vault_id`, read only by
   `doctor`.
 
+- The `langgraph` target generates `mcp_servers.json` from the module's
+  `mcp_server` blocks (KAS-65)
+
+  Connection config stops being a file you write and becomes a file the build
+  writes — deterministic and marked do-not-edit, like everything else in the
+  output directory. It holds connection config only: **a credential value never
+  appears in it, and neither does an `auth.ref`.** Authentication is injected by
+  the generated bridge, which maps each server to the environment variable its
+  `env://` ref names and reads that variable in your own process at call time.
+  `KASTOR_MCP_CONFIG` survives as a local override for one run — a development
+  escape hatch for aiming at a local server instance — and `ensure_config()` now
+  checks only that path, since the default one is generated.
+
+- The `eve` target dials the url an `mcp_server` block declares (KAS-65)
+
+  `connections/<server>.ts` carries the endpoint literally instead of reading
+  `KASTOR_MCP_<SERVER>_URL`, and builds an `Authorization: Bearer` header in the
+  existing headers callback from the server's `env://` ref. The credential read
+  stays inside the callback, never at module top level, because `eve build`
+  evaluates connection modules and a build has to succeed without deployment
+  credentials. `stdio` transport and `connection://` refs are errors on this
+  target — an eve connection is an HTTP client, and a generated project holds no
+  platform connections.
+
 ### Changed
 
 - `claude_agents` takes an MCP server's URL from its `mcp_server` block instead
@@ -83,6 +107,23 @@ v0 exit criteria KAS-36 are met.
   belong in the drift function. Verification moved to `kastor doctor`, and `plan`
   is a pure read again — it works offline, against the in-memory provider, and in
   network-restricted CI with no flag to disable anything.
+
+- **Breaking:** `KASTOR_MCP_<SERVER>_URL` is gone from every target (KAS-65)
+
+  KAS-63 removed it from `claude_agents`; it is now removed from `langgraph` and
+  `eve` as well, which completes the move of a server's address out of the
+  operator's shell and into the spec. There is no deprecation window and no
+  fallback: pre-1.0, a fallback would keep the state-file defect it was removed
+  for alive for another release. **A module that validates today and names an
+  undeclared MCP server now fails**, with an error that names the fix —
+  `declare mcp_server "<name>" in the project file`. Add one block per server,
+  with the URL the variable used to supply.
+
+- `kastor init` no longer scaffolds `mcp_servers.json` (KAS-65)
+
+  The scaffold declares an `mcp_server "fetch"` block in `kastor.hcl` instead,
+  and the build generates the connection config. Five scaffold files now rather
+  than six, and one less thing to keep in sync by hand.
 
 ### Fixed
 

@@ -69,22 +69,6 @@ func isTSIdent(s string) bool {
 	return true
 }
 
-// envName maps an MCP server name to the environment variable holding its
-// endpoint URL: characters outside [A-Za-z0-9] become underscores.
-func envName(server string) string {
-	var b strings.Builder
-	b.WriteString("KASTOR_MCP_")
-	for _, r := range strings.ToUpper(server) {
-		if r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
-			b.WriteRune(r)
-		} else {
-			b.WriteByte('_')
-		}
-	}
-	b.WriteString("_URL")
-	return b.String()
-}
-
 // sortedCopy returns in re-sorted by name without mutating the module.
 func sortedCopy[T any](in []T, name func(T) string) []T {
 	out := append([]T(nil), in...)

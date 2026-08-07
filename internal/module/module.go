@@ -334,8 +334,8 @@ func (m *Module) resolveToolSource(t *schema.Tool) []error {
 	if sym, ok := m.symbols[addr]; ok && sym.Kind == "mcp_server" {
 		return nil
 	}
-	return []error{fmt.Errorf("%s: %s: source uri %q names undeclared MCP server %q (declared servers: %s)",
-		file, t.Addr(), t.Source.URI, server, joinOrNone(m.mcpServerNames()))}
+	return []error{fmt.Errorf("%s: %s: source uri %q names undeclared MCP server %q; declare mcp_server %q in the project file (declared servers: %s)",
+		file, t.Addr(), t.Source.URI, server, server, joinOrNone(m.mcpServerNames()))}
 }
 
 // resolveMCPServer checks every target.<name> reference on a server's auth
@@ -401,8 +401,12 @@ func (m *Module) checkAuthCoverage() []error {
 }
 
 // claudeTargetName is the target label that selects the Claude Managed Agents
-// provider (SPEC.md §3.5).
-const claudeTargetName = "claude_agents"
+// provider (SPEC.md §3.5). eveTargetName is the codegen target whose MCP
+// binding is an HTTP client, which is what puts it in the transport matrix.
+const (
+	claudeTargetName = "claude_agents"
+	eveTargetName    = "eve"
+)
 
 // checkCredentialTargets enforces the (scheme, target) matrix of SPEC.md §3.6
 // and the transport matrix above it, plus §3.5's rule that a target whose
@@ -431,8 +435,16 @@ func (m *Module) checkCredentialTargets() []error {
 		file := m.symbols[s.Addr()].File
 
 		for _, tgt := range m.Targets {
-			if s.Transport == "stdio" && tgt.Type == "platform" {
+			// The transport matrix of §3.6: stdio is spawned by a generated
+			// langgraph project, but a platform dials a URL and eve's MCP
+			// binding is an HTTP client, so neither can reach a local process.
+			switch {
+			case s.Transport != "stdio":
+			case tgt.Type == "platform":
 				errs = append(errs, fmt.Errorf("%s: %s: transport \"stdio\" cannot be bound on %s; a platform dials a URL and cannot spawn a local process",
+					file, s.Addr(), tgt.Addr()))
+			case tgt.Name == eveTargetName:
+				errs = append(errs, fmt.Errorf("%s: %s: transport \"stdio\" cannot be bound on %s; the generated connection is an HTTP client — put an HTTP bridge in front of the server and declare its url",
 					file, s.Addr(), tgt.Addr()))
 			}
 

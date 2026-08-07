@@ -203,7 +203,7 @@ func TestLoadErrors(t *testing.T) {
 			name: "mcp uri naming an undeclared server lists what is declared",
 			dir:  "unknown_mcp_server",
 			wantErrs: []string{
-				`tools.tool: tool.search: source uri "mcp://ghost/search" names undeclared MCP server "ghost" (declared servers: none declared)`,
+				`tools.tool: tool.search: source uri "mcp://ghost/search" names undeclared MCP server "ghost"; declare mcp_server "ghost" in the project file (declared servers: none declared)`,
 			},
 		},
 		{
@@ -234,6 +234,13 @@ func TestLoadErrors(t *testing.T) {
 			dir:  "stdio_on_platform",
 			wantErrs: []string{
 				`mcp_server.fetch: transport "stdio" cannot be bound on target.claude_agents`,
+			},
+		},
+		{
+			name: "a stdio server cannot be bound on the eve target",
+			dir:  "stdio_on_eve",
+			wantErrs: []string{
+				`mcp_server.fetch: transport "stdio" cannot be bound on target.eve; the generated connection is an HTTP client`,
 			},
 		},
 		{

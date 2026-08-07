@@ -33,34 +33,16 @@ Tools:
 
 ## MCP servers
 
-Tools with `kind = "mcp"` read server connection details from
-`mcp_servers.json` in the working directory (or the file named by
-`KASTOR_MCP_CONFIG`), keyed by server name. Values are langchain-mcp-adapters
-connection dicts — a local stdio server:
+Tools with `kind = "mcp"` reach their server through the connection config
+in `mcp_servers.json`, generated from the module's `mcp_server` blocks. Like every
+other file here it is rewritten by the next build — change the spec, not the
+file. Point `KASTOR_MCP_CONFIG` at another file to override it wholesale for
+one run (a development escape hatch; it carries no validation).
 
-```json
-{
-  "<server>": {
-    "transport": "stdio",
-    "command": "your-mcp-server",
-    "args": []
-  }
-}
-```
+Server credentials come from the environment, read at call time — kastor
+never holds one, and neither the config file nor the spec carries a value:
 
-or a hosted HTTP endpoint:
-
-```json
-{
-  "<server>": {
-    "transport": "streamable_http",
-    "url": "https://example.com/mcp/?apiKey=YOUR-KEY"
-  }
-}
-```
-
-Hosted endpoints often embed the API key in the URL, so treat the config
-file as a secret and keep it out of version control.
+- server `search-server`: set `TAVILY_API_KEY` (auth ref `env://TAVILY_API_KEY`)
 
 The spec's `mcp://<server>/<tool>` URI must name a tool the server
 actually advertises; the call fails with "does not expose tool" otherwise.
