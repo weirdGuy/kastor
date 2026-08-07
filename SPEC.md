@@ -88,7 +88,11 @@ agent "weather" {
   model         = model.fast
   system_prompt = prompt.weather_system
  
-  tools = [tool.web_search]
+  tools = [tool.web_search, tool.forecast_publish]
+ 
+  # A human approves before this agent calls these. Everything else in
+  # `tools` runs unsupervised.
+  requires_approval = [tool.forecast_publish]
  
   input "location" {
     type        = string
@@ -121,6 +125,53 @@ agent "weather" {
 - Validation: every variable a prompt requires must be satisfiable from the agent's inputs/outputs; conflict = compile error.
 - `system_prompt` is **optional** (issue #7): an agent may omit it entirely, in which case the prompt-variable check is a no-op. When present it must be a `prompt.<name>` reference.
 - An input `default` that references another agent's output (`default = agent.forecast.output.summary`) creates the dependency edge and is validated at compile time (the referenced output must exist), but **v0 codegen does not wire the data flow** — see §4.
+
+**Tool approval.** `requires_approval` names the tools this agent may not call
+without a human saying yes. It is the answer to "what can this agent do
+unsupervised", stated where a reviewer reads it — in the diff, next to the
+grant it narrows.
+
+**`tools` is the grant; `requires_approval` narrows it.** The two lists are not
+peers. A tool absent from `tools` cannot be called at all — that is the
+denial, and every target implements it: `claude_agents` sets the toolset's
+`default_config.enabled = false` and enables only the declared tools, `eve`
+pins the declared tool names as the connection's allow-list, `langgraph`
+passes exactly them to `create_agent`. A tool in `tools` is callable. A tool in
+both is callable after a human approves. There is deliberately **no `deny`
+value**: it would be a second, weaker spelling of omission, and the platform
+API has no such policy to map it onto.
+
+**Rules:**
+- `requires_approval` is an optional list of `tool.<name>` references. Omitted
+  (or an explicit `[]`) means every granted tool runs unsupervised.
+- Every entry must also appear in `tools`. Approving a tool the agent was never
+  granted is a compile error naming both lists — it reads as a grant and is
+  not one.
+- Duplicate entries are a compile error, as everywhere else.
+- Entries are ordinary `tool.<name>` references and resolve like any other
+  (§4). They create no *new* edge: a tool named here is already in `tools`.
+- **The default is allow, and it is a decision, not an omission.** Declaring a
+  tool is granting it; requiring approval by default would make `tools` mean
+  nothing on its own. It would also fail closed *silently* — a platform agent
+  deployed with every tool set to ask, and no human attached to its sessions,
+  applies green and then cannot act. The fail-closed default already exists
+  and is already explicit: leave the tool out of `tools`.
+
+**Approval support is per target**, mirroring §3.1 and §3.3. Unlike those, it
+is a **feature capability, not a binding** — see §3.3, "A declared target is a
+promise", for what that distinction costs:
+
+| | `langgraph` | `eve` | `claude_agents` |
+|---|-------------|-------|-----------------|
+| `requires_approval` | not yet — deferred to its own issue | yes — `needsApproval` on an authored tool, `approval` on an MCP connection | yes — the tool's `permission_policy` becomes `always_ask` |
+
+On `langgraph` the mapping exists but is not free: `HumanInTheLoopMiddleware`
+requires a checkpointer and a resume step, so honoring approval means the
+generated `run()` stops being a one-shot call and gains an interrupt/resume
+contract. That is a change to the generated project's public shape, not a flag,
+which is why it is deferred rather than unsupported. The support table says
+"not yet" for exactly this reason, and will say "yes" without a spec change.
+
 ### 3.3 `tool` (.tool file)
  
 A tool is an **interface + implementation source**.
@@ -202,6 +253,31 @@ tool "web_search" {
 This matrix belongs to the targets, not to the module: each generator and provider declares the source kinds it supports, and **`kastor validate` cross-checks every tool against every target the module declares** (§5). Targets never declare capabilities in HCL — the matrix is part of a target's implementation, and this table is its documentation.
 
 **A declared target is a promise.** A module that cannot build or apply for a target it declares fails at `validate`, not at `build` or `plan` — which means a broken `langgraph` binding also stops `kastor plan` for a `claude_agents` target in the same module, since both commands run the same pipeline. That is the enforceable reading of "write once, target many": if a target is declared, the module is claimed to work there. A module that genuinely targets one destination declares one target; per-target `source` blocks are how a module keeps a target it would otherwise have to drop.
+
+**The promise covers bindings, not every feature.** The rule above is
+enforceable because it comes with an escape hatch: a tool a target cannot bind
+can be given one with `targets`. Not every unsupported thing has that shape, so
+the language distinguishes two cases by a single test — **can the target render
+the resource at all, or only render it without honoring a modifier on it?**
+
+| | Example | Where it fails | Blast radius |
+|---|---------|----------------|--------------|
+| **Binding** — the target cannot render the resource | `builtin` on `langgraph`: no tool function can be emitted | `validate`, module-wide | every command, every target |
+| **Feature capability** — the resource renders, a modifier on it cannot be honored | `requires_approval` on `langgraph`: `tools/<name>.py` emits correctly; only the approval gate has nowhere to go | `validate` **warns**; `build` errors for that target alone | that one codegen target |
+
+A feature capability therefore does **not** block `kastor plan` for a platform
+target in the same module, and does not block `kastor build --target <other>`.
+`kastor validate` reports it as a warning naming the agent, the target, and the
+tools affected, and still exits 0 (§5) — the module is valid, one target cannot
+honor all of it yet.
+
+The reason the two differ is what the user can do about it. An unbindable tool
+has a fix in the language; an unsupported feature has none short of dropping
+the feature or the target, and a rule that can only be satisfied by deleting
+something should not take the whole module down with it. The cost of the
+distinction is that every future capability has to be sorted into one bucket;
+the test above is how, and the answer belongs in the target's capability
+descriptor, not in a bespoke rule per feature.
 
 Validate checks only what is knowable from the spec. Facts that depend on the environment — a missing MCP endpoint variable, rejected credentials — remain the provider's to report through `Diff` (§6), so `kastor validate` still needs no credentials and no network.
 
@@ -398,14 +474,14 @@ path only, the generated runtime config may still be overridden locally (§3.3,
 | Command | Function |
 |---------|----------|
 | `kastor init` | Scaffold project |
-| `kastor validate` | Parse + type-check + resolve references + check every tool against every declared target |
+| `kastor validate` | Parse + type-check + resolve references + check every tool against every declared target, warning on features a declared target cannot honor yet (§3.3) |
 | `kastor build [-target X]` | Codegen for framework targets |
 | `kastor plan` | Diff spec vs. state file vs. remote platform |
 | `kastor apply` | Reconcile platform targets, update state |
 | `kastor destroy` | Remove managed remote agents |
 | `kastor fmt` | Canonical formatting |
  
-Exit codes (all commands): 0 clean, 1 validation/codegen/plan/apply errors, 2 usage/IO errors (including lock contention).
+Exit codes (all commands): 0 clean, 1 validation/codegen/plan/apply errors, 2 usage/IO errors (including lock contention). **Warnings never change an exit code.** They are diagnostics with a severity, not soft failures — a module that warns is a module that is valid. Every command's diagnostics carry that severity (§5.2 already relies on it for drift), so the `--json` rendering of §9 reports warnings without a second convention.
 
 ### 5.1 State file
 
@@ -503,7 +579,18 @@ The plan/apply engine is target-agnostic and consumes exactly what `kastor valid
 ## 7. Deferred to v1+
  
 - **Memory/state config** on agents (conversation memory, vector stores)
-- **Guardrails** blocks (input/output filters, budgets, rate limits)
+- **Guardrails** blocks (input/output filters, budgets, rate limits). Tool
+  approval (§3.2) is **not** a precedent for these, and the line between them is
+  stated rather than felt: *kastor configures what a target natively models as
+  an attribute of the resource kastor creates; it does not implement
+  enforcement.* Approval passes that test — `claude_agents` and `eve` each have
+  a per-tool approval attribute, and kastor was already authoring one on every
+  agent whether or not the spec mentioned it (leaving it unset is what deployed
+  agents that applied green and could call nothing). Making it visible added no
+  capability; it surfaced one kastor was exercising silently. Budgets, rate
+  limits, and content filters are weighed against the same test when they are
+  asked for, and admitting one of them requires passing it — not citing this
+  entry.
 - Multi-agent orchestration graphs (routing, handoffs) beyond simple references
 - Module registry / package management for sharing `.agent`/`.tool` files
 - **More credential resolvers** — `vault://`, `op://`, `aws-sm://` alongside v0's `env://` and `connection://` (§3.6). Purely additive: the scheme set is closed and rejects unknown schemes, so each new resolver is an addition within the language version. Each also brings a dependency and an auth story of its own, and would be the first scheme requiring kastor to *read* a secret — so each needs its own design pass. Kastor holding or brokering a credential is **not** on this list; it is a permanent non-goal (§3.6).
