@@ -89,6 +89,21 @@ func TestClaudeManagedAgentsAcceptance(t *testing.T) {
 	// live turn and watch the platform evaluate the MCP call.
 	assertMCPToolIsCallable(t, resource.ID)
 
+	// 1d. doctor against the live agent (KAS-63). The acceptance module's
+	// server declares no auth, so what this covers is the other half: the
+	// remote object resolves and the deployed agent is permitted to call
+	// every tool it declares — the KAS-57 outage as a readiness check rather
+	// than as a silent failure at the first tool call.
+	out = runAcceptanceCLI(t, "doctor", dir)
+	assertOutputContains(t, out,
+		claudeAcceptanceAddr,
+		"remote object exists",
+		"is ready",
+	)
+	if strings.Contains(out, "could not be verified") {
+		t.Errorf("doctor could not complete a check against the live platform:\n%s", out)
+	}
+
 	// 2. A plan immediately after creation is clean.
 	out = runAcceptanceCLI(t, "plan", dir)
 	assertOutputContains(t, out,

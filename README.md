@@ -127,7 +127,52 @@ $ kastor plan examples/weather/
 Plan for target.memory: 3 to create, 0 to update, 0 to delete, 0 unchanged.
 ```
 
-`kastor plan` is a pure read: it never touches remote resources or the state file. Updates show attribute-level diffs, and out-of-band remote changes surface as drift warnings.
+`kastor plan` is a pure read: it never touches remote resources or the state file, and it needs no network beyond the platform it is planning against. Updates show attribute-level diffs, and out-of-band remote changes surface as drift warnings.
+
+## Readiness: `kastor doctor`
+
+`plan` and `apply` answer "does the remote match the spec". They cannot answer
+"can the thing that is deployed actually run" — an agent whose MCP connections
+are unauthenticated and whose tool permissions deny everything matches its spec
+exactly, plans clean, and cannot serve a request. That question has its own
+verb:
+
+```console
+$ kastor doctor --target claude_agents examples/hubspot/
+Environment:
+  ✓ ANTHROPIC_API_KEY: environment variable is set
+      target.claude_agents authenticates against this platform
+
+agent.sales (agent_011CZq…)
+  ✓ agent_011CZq…: remote object exists
+  ✗ cred_011CZkZDLs7fYzm1hXNPeRjv ("HubSpot Prod"): connection is not authenticated: the OAuth grant has expired
+      mcp_server.hubspot references connection://cred_011CZkZDLs7fYzm1hXNPeRjv, whose grant
+      expired at 2026-08-01T09:14:22Z and carries no refresh token; re-authorize the
+      connection on the platform
+  ✓ search: tool is granted with permission "always_allow"
+
+Readiness for target.claude_agents: 3 ok, 1 failed, 0 could not be verified.
+```
+
+`doctor` is read-only: it never invokes an agent, never changes a remote object,
+and never writes state. It exits 0 when everything is ready and 1 when anything
+is not.
+
+Three things worth knowing:
+
+- **"Could not verify" is not "missing."** A check reports `ok`, `failed`, or
+  `unknown`, and the third is load-bearing. An unreachable vault reports `?
+  could not verify the credential against the vault`; a vault that answers and
+  holds no such credential reports `✗ credential does not exist in the vault`.
+  Those are different problems with different fixes, so they are never
+  collapsed. `unknown` still counts against readiness — the command did not
+  establish that the module is ready.
+- **Credential ids print with their display name alongside.** The id is the
+  identifier because a display name is nullable and non-unique on the platform,
+  but `cred_011CZ… ("HubSpot Prod")` is what you can act on.
+- **Environment readiness needs no platform at all.** The `env://` refs your
+  module declares are compared against your shell, so `doctor` answers "what does
+  this module need from my environment before it will run" offline.
 
 ## Quickstart: hosted Claude agents
 

@@ -24,7 +24,9 @@ func runCLI(t *testing.T, args ...string) (string, error) {
 	cmd.SetErr(&out)
 	cmd.SetArgs(args)
 	err := cmd.Execute()
-	if err != nil {
+	// Mirror main: an error with an empty message means the command already
+	// printed everything the user needs, and only the exit status is left.
+	if err != nil && err.Error() != "" {
 		fmt.Fprintf(&out, "kastor: %v\n", err)
 	}
 	return out.String(), err

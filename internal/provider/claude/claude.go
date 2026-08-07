@@ -37,10 +37,14 @@ var (
 type Provider struct {
 	client       anthropic.Client
 	authEnv      string
+	vaultID      string // target.vault_id; read by Check only (SPEC.md §5.3)
 	sleep        func(context.Context, time.Duration) error
 	createPacer  *requestPacer
 	readPacer    *requestPacer
 	retryBackoff func(error, int) time.Duration
+	// fetchCredential is the vault lookup, injectable so kastor doctor is
+	// testable without a network. Nil means use the SDK.
+	fetchCredential func(ctx context.Context, vaultID, credentialID string) (*vaultCredential, error)
 }
 
 var _ provider.Provider = (*Provider)(nil)
