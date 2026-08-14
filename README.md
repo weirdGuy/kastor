@@ -1,3 +1,6 @@
+> [!TIP]
+> Working on a new release, it's coming out 18th of September.
+
 # Kastor
 
 **Kastor is a source-of-truth layer for AI agents.**
