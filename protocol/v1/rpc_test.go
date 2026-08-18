@@ -13,11 +13,26 @@ import (
 type fakeHandler struct{}
 
 func (fakeHandler) Metadata(context.Context) (Metadata, error) {
-	return Metadata{Protocol: Version, Source: "example.test/fake", Version: "0.1.0", Kinds: []Kind{KindCodegen}}, nil
+	return Metadata{Protocol: Version, Source: "example.test/fake", Version: "0.1.0", Kinds: []Kind{KindCodegen, KindPlatform}}, nil
 }
 
 func (fakeHandler) Generate(_ context.Context, request *GenerateRequest) (*GenerateResponse, error) {
 	return &GenerateResponse{Files: []File{{Path: request.Target.Name + ".txt", Data: []byte("ok")}}}, nil
+}
+
+func (fakeHandler) Read(_ context.Context, request *ReadRequest) (*ReadResponse, error) {
+	return &ReadResponse{Found: true, Remote: Object{"id": request.ID}}, nil
+}
+
+func (fakeHandler) Create(context.Context, *CreateRequest) (*CreateResponse, error) {
+	return &CreateResponse{ID: "fake-created"}, nil
+}
+
+func (fakeHandler) Update(context.Context, *UpdateRequest) error { return nil }
+func (fakeHandler) Delete(context.Context, *DeleteRequest) error { return nil }
+
+func (fakeHandler) Diff(_ context.Context, request *DiffRequest) (*DiffResponse, error) {
+	return &DiffResponse{Diffs: []AttrDiff{{Path: "name", Old: request.Remote["name"], New: request.Desired.Config["name"]}}}, nil
 }
 
 func TestServeRoundTrip(t *testing.T) {
@@ -73,7 +88,7 @@ func TestServeRejectsProtocolMismatch(t *testing.T) {
 }
 
 func TestServeRejectsUnsupportedMethod(t *testing.T) {
-	_, err := dispatch(context.Background(), fakeHandler{}, wireRequest{Protocol: Version, Method: methodRead, Payload: json.RawMessage(`{"id":"x"}`)})
+	_, err := dispatch(context.Background(), fakeHandler{}, wireRequest{Protocol: Version, Method: methodCheck, Payload: json.RawMessage(`{"target":{"name":"prod"}}`)})
 	remote, ok := err.(*RemoteError)
 	if !ok || remote.Code != "unsupported_method" {
 		t.Fatalf("error = %#v", err)
@@ -115,6 +130,17 @@ func TestClientRunsExecutablePlugin(t *testing.T) {
 	}
 	if len(response.Files) != 1 || response.Files[0].Path != "python.txt" {
 		t.Fatalf("response = %#v", response)
+	}
+	diff, err := client.Diff(ctx, &DiffRequest{
+		Target:  &Target{Name: "prod"},
+		Desired: &Resource{Addr: "agent.probe", Config: Object{"name": "desired"}},
+		Remote:  Object{"name": "remote"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diff.Diffs) != 1 || diff.Diffs[0].Path != "name" {
+		t.Fatalf("diff = %#v", diff)
 	}
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"path/filepath"
@@ -74,5 +75,21 @@ func TestTargetPluginSourceUsesRequirementNotTargetLabel(t *testing.T) {
 	}
 	if got != evePluginSource {
 		t.Errorf("targetPluginSource = %q, want %q", got, evePluginSource)
+	}
+}
+
+func TestLegacyTargetReportsMigrationWarning(t *testing.T) {
+	mod, err := module.Load(filepath.Join("testdata", "build", "single"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var warnings bytes.Buffer
+	if err := validateTargetPlugins(context.Background(), &warnings, mod); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"target.langgraph", "kastor.required_plugins", "set plugin"} {
+		if !strings.Contains(warnings.String(), want) {
+			t.Errorf("warning missing %q:\n%s", want, warnings.String())
+		}
 	}
 }

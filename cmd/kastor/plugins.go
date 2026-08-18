@@ -121,6 +121,9 @@ func validateTargetPlugins(ctx context.Context, warnings io.Writer, mod *module.
 		if !known {
 			continue
 		}
+		if source != "memory" {
+			fmt.Fprintf(warnings, "Warning: %s uses legacy target-name implementation selection; declare it in kastor.required_plugins and set plugin on the target\n", tgt.Addr())
+		}
 		configKeys := make([]string, 0, len(tgt.Config))
 		for key := range tgt.Config {
 			configKeys = append(configKeys, key)
