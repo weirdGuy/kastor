@@ -115,6 +115,7 @@ func TestInitCommandErrors(t *testing.T) {
 // new directory, then the scaffolded module must pass kastor validate and
 // kastor build with zero edits, and be in canonical kastor fmt style.
 func TestInitCommandScaffoldWorks(t *testing.T) {
+	useFakeCodegenPlugins(t)
 	dir := filepath.Join(t.TempDir(), "demo") // init must create missing dirs
 	out, err := runCmd(t, "init", dir)
 	if err != nil {
@@ -133,7 +134,7 @@ func TestInitCommandScaffoldWorks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("validate Execute() error = %v\noutput:\n%s", err, out)
 	}
-	if !strings.Contains(out, "1 agent, 1 tool, 1 prompt, 1 model, 1 target") {
+	if !strings.Contains(out, "1 agent, 1 tool, 1 prompt, 1 plugin, 1 model, 1 target") {
 		t.Errorf("validate output missing module summary:\n%s", out)
 	}
 

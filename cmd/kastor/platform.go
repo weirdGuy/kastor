@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
 
 	"github.com/weirdGuy/kastor/internal/module"
+	pluginruntime "github.com/weirdGuy/kastor/internal/plugin"
 	"github.com/weirdGuy/kastor/internal/provider"
 	"github.com/weirdGuy/kastor/internal/provider/claude"
 	"github.com/weirdGuy/kastor/internal/provider/memory"
@@ -14,9 +17,8 @@ import (
 	"github.com/weirdGuy/kastor/internal/state"
 )
 
-// providerFactories maps a platform target's name to its provider factory:
-// the target label doubles as the provider selector, exactly like codegen
-// target names select generators (see cmd/kastor/build.go).
+// providerFactories contains only the v0.2 compatibility implementations.
+// Targets with explicit plugin selectors always execute the declared binary.
 var providerFactories = map[string]func(*schema.Target) (provider.Provider, error){
 	"claude_agents": claude.Factory,
 	"memory":        memory.Factory,
@@ -27,14 +29,15 @@ var providerFactories = map[string]func(*schema.Target) (provider.Provider, erro
 type platformJob struct {
 	job      *provider.Job
 	provider provider.Provider
+	close    func() error
 }
 
 // preparePlatform runs the shared front half of plan/apply/destroy:
 // validate the module, select the platform targets, resolve their
 // providers, take the state lock, and load the state file. The returned
 // release function must be called (once) when the command is done.
-func preparePlatform(stderr io.Writer, dir, targetName string) (jobs []*platformJob, release func() error, err error) {
-	mod, g, err := compileModule(stderr, dir)
+func preparePlatform(ctx context.Context, stderr io.Writer, dir, targetName string) (jobs []*platformJob, release func() error, err error) {
+	mod, g, err := compileModule(ctx, stderr, dir)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -46,27 +49,30 @@ func preparePlatform(stderr io.Writer, dir, targetName string) (jobs []*platform
 	// Resolve providers before locking: a missing provider needs no lock.
 	var resolved []*platformJob
 	for _, tgt := range targets {
-		p, err := providerFor(tgt)
+		p, closeProvider, err := providerFor(ctx, mod, tgt)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, errors.Join(err, closePlatformJobs(resolved))
 		}
 		resolved = append(resolved, &platformJob{
 			job:      &provider.Job{Module: mod, Graph: g, Target: tgt},
 			provider: p,
+			close:    closeProvider,
 		})
 	}
 
-	release, err = state.Lock(dir)
+	releaseState, err := state.Lock(dir)
 	if err != nil {
-		return nil, nil, withExitCode(2, err)
+		return nil, nil, withExitCode(2, errors.Join(err, closePlatformJobs(resolved)))
 	}
 	st, err := state.Load(dir)
 	if err != nil {
-		release()
-		return nil, nil, err
+		return nil, nil, errors.Join(err, closePlatformJobs(resolved), releaseState())
 	}
 	for _, pj := range resolved {
 		pj.job.State = st
+	}
+	release = func() error {
+		return errors.Join(closePlatformJobs(resolved), releaseState())
 	}
 	return resolved, release, nil
 }
@@ -112,17 +118,43 @@ func platformNames(mod *module.Module) []string {
 	return names
 }
 
-// providerFor resolves a platform target's provider from the registry.
-func providerFor(tgt *schema.Target) (provider.Provider, error) {
-	factory, ok := providerFactories[tgt.Name]
+// providerFor resolves a platform target through either the explicit
+// executable protocol or the v0.2 in-process compatibility registry.
+func providerFor(ctx context.Context, mod *module.Module, tgt *schema.Target) (provider.Provider, func() error, error) {
+	if tgt.Plugin != "" {
+		client, err := openTargetPlugin(ctx, mod, tgt)
+		if err != nil {
+			return nil, nil, err
+		}
+		return &pluginruntime.Platform{Client: client, Target: tgt}, client.Close, nil
+	}
+
+	source, err := targetPluginSource(mod, tgt)
+	if err != nil {
+		return nil, nil, err
+	}
+	factory, ok := providerFactories[source]
 	if !ok {
-		return nil, fmt.Errorf("%s: no platform provider named %q (available: %s)", tgt.Addr(), tgt.Name, joinOrNone(providerNames()))
+		return nil, nil, fmt.Errorf("%s: no platform provider installed for legacy target %q (available: %s)", tgt.Addr(), source, joinOrNone(providerNames()))
 	}
 	p, err := factory(tgt)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", tgt.Addr(), err)
+		return nil, nil, fmt.Errorf("%s: %w", tgt.Addr(), err)
 	}
-	return p, nil
+	return p, nil, nil
+}
+
+func closePlatformJobs(jobs []*platformJob) error {
+	var errs []error
+	for i := len(jobs) - 1; i >= 0; i-- {
+		if jobs[i].close == nil {
+			continue
+		}
+		if err := jobs[i].close(); err != nil {
+			errs = append(errs, fmt.Errorf("%s: close plugin: %w", jobs[i].job.Target.Addr(), err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func providerNames() []string {

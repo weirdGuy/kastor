@@ -16,7 +16,7 @@ target "langgraph" {
 target "claude_agents" {
   type = "platform"
 
-  auth {
+  config {
     api_key_env = "ANTHROPIC_API_KEY"
   }
 }

@@ -4,8 +4,11 @@ target "langgraph" {
 }
 
 target "claude_agents" {
-  type     = "platform"
-  vault_id = "vlt_011CZaBcDeFgHiJkLmNoPqRs"
+  type = "platform"
+
+  config {
+    vault_id = "vlt_011CZaBcDeFgHiJkLmNoPqRs"
+  }
 }
 
 # Remote server, credential held by the platform on one path and by the

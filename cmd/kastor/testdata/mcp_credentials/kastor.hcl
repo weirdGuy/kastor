@@ -11,8 +11,11 @@ target "fake" {
 }
 
 target "claude_agents" {
-  type     = "platform"
-  vault_id = "vlt_011CZkZDLs7fYzm1hXNPeRjvVAULT"
+  type = "platform"
+
+  config {
+    vault_id = "vlt_011CZkZDLs7fYzm1hXNPeRjvVAULT"
+  }
 }
 
 mcp_server "hubspot" {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -24,13 +25,13 @@ func newValidateCmd() *cobra.Command {
 			if len(args) == 1 {
 				dir = args[0]
 			}
-			return runValidate(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir)
+			return runValidate(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), dir)
 		},
 	}
 }
 
-func runValidate(stdout, stderr io.Writer, dir string) error {
-	mod, _, err := compileModule(stderr, dir)
+func runValidate(ctx context.Context, stdout, stderr io.Writer, dir string) error {
+	mod, _, err := compileModule(ctx, stderr, dir)
 	if err != nil {
 		return err
 	}
@@ -44,9 +45,12 @@ func runValidate(stdout, stderr io.Writer, dir string) error {
 // run because the next stage needs its output; diagnostics within a stage
 // are always reported in full to stderr. Both validate and build sit on this
 // — build must never generate from a module that fails it.
-func compileModule(stderr io.Writer, dir string) (*module.Module, *graph.Graph, error) {
+func compileModule(ctx context.Context, stderr io.Writer, dir string) (*module.Module, *graph.Graph, error) {
 	mod, err := module.Load(dir)
 	var g *graph.Graph
+	if err == nil {
+		err = validateTargetPlugins(ctx, stderr, mod)
+	}
 	if err == nil {
 		g, err = graph.Build(mod)
 	}
@@ -106,6 +110,7 @@ func moduleSummary(mod *module.Module) string {
 		countNoun(len(mod.Agents), "agent"),
 		countNoun(len(mod.Tools), "tool"),
 		countNoun(len(mod.Prompts), "prompt"),
+		countNoun(len(mod.Plugins), "plugin"),
 		countNoun(len(mod.Models), "model"),
 		countNoun(len(mod.Targets), "target"),
 	}, ", ")

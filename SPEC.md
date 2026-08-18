@@ -333,33 +333,74 @@ No model, no IO — prompts are pure templates (per decision #2).
 - The body is everything after the closing delimiter line, preserved byte for byte.
 
 ### 3.5 `target` (project file)
- 
-Where the spec goes. Two categories mirror the two verbs:
- 
+
+Target implementations are external plugins. A module declares their stable
+source and version separately from target instances:
+
 ```hcl
-# Codegen target → `kastor build`
-target "langgraph" {
+kastor {
+  required_plugins {
+    langgraph = {
+      source  = "github.com/getkastordev/kastor-langgraph"
+      version = "~> 0.1"
+    }
+    anthropic = {
+      source  = "github.com/getkastordev/kastor-anthropic"
+      version = "~> 0.1"
+    }
+  }
+}
+
+# Codegen target instance → `kastor build`
+target "python" {
   type   = "codegen"
+  plugin = "langgraph"
   output = "./gen/langgraph"
 }
- 
-# Managed platform target → `kastor plan` / `kastor apply`
-target "claude_agents" {
-  type = "platform"
-  auth {
+
+# Managed platform target instance → `kastor plan` / `kastor apply`
+target "production" {
+  type   = "platform"
+  plugin = "anthropic"
+
+  config {
     api_key_env = "ANTHROPIC_API_KEY"
+    vault_id    = "vlt_011CZkZDLs7fYzm1hXNPeRjv"
   }
 }
 ```
 
 **Rules:**
+- `kastor.required_plugins` maps a module-local name to a stable `source` and a
+  version constraint. Both strings are required and unknown fields are errors.
+  The local name is configuration syntax only; installation and state identity
+  use the source plus the selected locked version.
+- `target.plugin` names one entry in `required_plugins`. A missing entry is a
+  compile error listing the declared plugins. During the v0.2 migration window,
+  an omitted selector is accepted as a deprecated compatibility form and the
+  target label is resolved through the legacy in-process adapter. New modules
+  and generated scaffolds always use the explicit form.
+- Explicit plugins are executable processes. Core resolves the binary from a
+  local-name override, the configured plugin directory, or `PATH`; performs a
+  protocol/source/version/kind handshake; and delegates validation plus the
+  target operation over the versioned protocol. The final source path segment
+  is the default executable name.
+- A target's label is only its module-local instance identity. Multiple target
+  blocks may select the same plugin with different output paths or config.
 - `type` is a closed enum: `codegen` or `platform`. Unknown values are a compile error; new target types are additive spec changes.
-- `codegen` targets require `output` and do not allow `auth`.
-- `platform` targets do not allow `output`; `auth` is optional (ambient credentials — env vars, instance roles — are the common case).
-- Fields that are meaningless for a target's type are errors, not ignored (configs rot through silent acceptance).
-- **A platform target's label selects its provider implementation**, exactly as a codegen target's label selects its generator: `target "claude_agents"` binds to the Claude Managed Agents reconciler, `target "memory"` to the built-in in-memory platform. A label with no registered provider is an error naming the available providers. (A separate `provider` attribute is deliberately deferred until something forces it — e.g. two targets on the same platform kind in one module.) A target's label is also how a tool's `source` block names it (§3.3).
-- The `memory` platform is built in: an **ephemeral in-memory store** so plan/apply can be demonstrated and exercised — examples, onboarding, CI — with no credentials and no network. `auth` on it is an error (meaningless fields, again). Its remote objects die with the process, so a later invocation's plan truthfully reports previously applied resources as remote-missing drift.
-- A `claude_agents` target may declare `vault_id` — the id of the Anthropic vault (`vlt_…`) holding the credentials its MCP servers reference. It is **required** when any `mcp_server` bound on this target carries a `connection://` auth ref (§3.6), and an error on every other target, `memory` and codegen targets alike (meaningless fields, again). It names a location, not a secret: the vault's contents are created and rotated outside kastor, and the only command that reads it is `kastor doctor` (§5.3), which reads enough to verify a reference resolves and never the credential's value. `plan` and `apply` never contact it.
+- `codegen` targets require `output`. `platform` targets do not allow it.
+- `config` is an optional literal-only map owned and validated by the selected
+  plugin. Core preserves it as a JSON-compatible value tree and has no
+  provider-specific fields. Unknown or meaningless config entries are plugin
+  errors rather than silently ignored values.
+- The built-in memory target is an **ephemeral in-memory store** for examples,
+  onboarding, and CI. It accepts no config. Its remote objects die with the
+  process, so a later invocation truthfully reports remote-missing drift.
+- The Anthropic plugin accepts `api_key_env` and `vault_id` in `config`.
+  `vault_id` is required when an MCP server bound to that target uses a
+  `connection://` reference. It names a location, not a secret; only plugin
+  readiness checks read enough to verify the reference. Plan and apply never
+  read credential values.
 
 ### 3.6 `mcp_server` (project file)
 
@@ -439,7 +480,7 @@ mcp_server "hubspot" {
 
 **On `claude_agents`, `connection://` is verified by `kastor doctor`** (§5.3),
 not by `plan`. The ref names a credential **id** in the vault the target declares
-(`vault_id`, §3.5) — not a display name, which the platform allows to be absent
+(`config.vault_id`, §3.5) — not a display name, which the platform allows to be absent
 and to repeat. `doctor` fetches it and reports a finding if it does not exist, if
 it is archived, or if the credential's own MCP server URL does not equal this
 block's `url`. So a typo'd, archived, or misdirected credential is named by a

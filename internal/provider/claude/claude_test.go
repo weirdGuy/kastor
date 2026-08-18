@@ -30,13 +30,13 @@ func TestFactoryResolvesAPIKeyEnvironment(t *testing.T) {
 		}
 	})
 
-	t.Run("target auth block", func(t *testing.T) {
+	t.Run("target config", func(t *testing.T) {
 		const env = "KASTOR_TEST_ANTHROPIC_KEY"
 		t.Setenv(env, testAPIKey)
 		got, err := Factory(&schema.Target{
-			Name: "claude_agents",
-			Type: "platform",
-			Auth: &schema.Auth{APIKeyEnv: env},
+			Name:   "claude_agents",
+			Type:   "platform",
+			Config: map[string]any{"api_key_env": env},
 		})
 		if err != nil || got == nil {
 			t.Fatalf("Factory() = %v, %v; want provider, nil", got, err)
@@ -47,12 +47,34 @@ func TestFactoryResolvesAPIKeyEnvironment(t *testing.T) {
 		const env = "KASTOR_TEST_MISSING_ANTHROPIC_KEY"
 		t.Setenv(env, "")
 		_, err := Factory(&schema.Target{
-			Name: "claude_agents",
-			Type: "platform",
-			Auth: &schema.Auth{APIKeyEnv: env},
+			Name:   "claude_agents",
+			Type:   "platform",
+			Config: map[string]any{"api_key_env": env},
 		})
 		if err == nil || !strings.Contains(err.Error(), env) {
 			t.Fatalf("Factory() error = %v; want missing-key error naming %s", err, env)
+		}
+	})
+
+	t.Run("unknown config", func(t *testing.T) {
+		_, err := Factory(&schema.Target{
+			Name:   "claude_agents",
+			Type:   "platform",
+			Config: map[string]any{"region": "us-east-1"},
+		})
+		if err == nil || !strings.Contains(err.Error(), `unsupported config attribute "region"`) {
+			t.Fatalf("Factory() error = %v; want unsupported-config error", err)
+		}
+	})
+
+	t.Run("config type", func(t *testing.T) {
+		_, err := Factory(&schema.Target{
+			Name:   "claude_agents",
+			Type:   "platform",
+			Config: map[string]any{"api_key_env": int64(1)},
+		})
+		if err == nil || !strings.Contains(err.Error(), "config.api_key_env must be a string") {
+			t.Fatalf("Factory() error = %v; want config type error", err)
 		}
 	})
 }

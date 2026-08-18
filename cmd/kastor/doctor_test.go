@@ -30,7 +30,7 @@ func readStateFile(t *testing.T, dir string) string {
 }
 
 // registerVaultFake wires a fake with a credential vault under the
-// claude_agents target label, replacing the real provider factory for the
+// legacy claude_agents target alias, replacing the real provider factory for the
 // duration of the test so doctor is exercised end to end without network.
 func registerVaultFake(t *testing.T, credentials map[string]providertest.Credential) *providertest.VaultFake {
 	t.Helper()

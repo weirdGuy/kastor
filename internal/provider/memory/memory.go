@@ -39,12 +39,11 @@ func New() *Provider {
 	return &Provider{Objects: map[string]provider.Object{}}
 }
 
-// Factory adapts New to the CLI's provider registry, validating the target
-// block first: auth is meaningless on an in-memory platform, and meaningless
-// fields are errors, not ignored (SPEC.md §3.5).
+// Factory adapts New to the CLI's provider registry. The in-memory plugin has
+// no configuration schema, so any config entry is rejected rather than ignored.
 func Factory(tgt *schema.Target) (provider.Provider, error) {
-	if tgt.Auth != nil {
-		return nil, fmt.Errorf("auth block found, but the in-memory platform takes no credentials — remove auth from the target block")
+	if len(tgt.Config) > 0 {
+		return nil, fmt.Errorf("config found, but the in-memory platform takes no configuration — remove the config block")
 	}
 	return New(), nil
 }

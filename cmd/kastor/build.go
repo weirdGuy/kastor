@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -15,14 +16,12 @@ import (
 	"github.com/weirdGuy/kastor/internal/build/langgraph"
 	"github.com/weirdGuy/kastor/internal/graph"
 	"github.com/weirdGuy/kastor/internal/module"
+	pluginruntime "github.com/weirdGuy/kastor/internal/plugin"
 	"github.com/weirdGuy/kastor/internal/schema"
 )
 
-// generators maps a codegen target's name to its framework generator: the
-// target label doubles as the framework selector (SPEC.md §3.5 has no
-// separate framework attribute). A codegen target whose name has no entry
-// here is a codegen error at build time, not a validation error — the block
-// itself is valid spec.
+// generators contains only the v0.2 compatibility implementations. Targets
+// with explicit plugin selectors always execute the declared binary.
 var generators = map[string]build.Generator{
 	"eve":       eve.Generator{},
 	"langgraph": langgraph.Generator{},
@@ -40,7 +39,7 @@ func newBuildCmd() *cobra.Command {
 			if len(args) == 1 {
 				dir = args[0]
 			}
-			return runBuild(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, target)
+			return runBuild(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, target)
 		},
 	}
 	cmd.Flags().StringVar(&target, "target", "", "build only the named codegen target (default: all codegen targets)")
@@ -61,8 +60,8 @@ func usageMaxArgs(n int) cobra.PositionalArgs {
 // selected codegen targets in order, stopping at the first failure. Output
 // already synced for earlier targets stays in place — every target's sync is
 // independently complete or untouched.
-func runBuild(stdout, stderr io.Writer, dir, targetName string) error {
-	mod, g, err := compileModule(stderr, dir)
+func runBuild(ctx context.Context, stdout, stderr io.Writer, dir, targetName string) error {
+	mod, g, err := compileModule(ctx, stderr, dir)
 	if err != nil {
 		return err
 	}
@@ -73,7 +72,7 @@ func runBuild(stdout, stderr io.Writer, dir, targetName string) error {
 	}
 
 	for _, tgt := range targets {
-		if err := buildTarget(stdout, stderr, mod, g, tgt); err != nil {
+		if err := buildTarget(ctx, stdout, stderr, mod, g, tgt); err != nil {
 			return err
 		}
 	}
@@ -114,17 +113,43 @@ func selectTargets(mod *module.Module, name string) ([]*schema.Target, error) {
 // buildTarget generates one codegen target and syncs the files into its
 // output directory. Generation failures keep the default exit code 1
 // (codegen errors); sync failures are IO errors, exit 2.
-func buildTarget(stdout, stderr io.Writer, mod *module.Module, g *graph.Graph, tgt *schema.Target) error {
-	gen, ok := generators[tgt.Name]
-	if !ok {
-		return fmt.Errorf("%s: no code generator named %q (available: %s)", tgt.Addr(), tgt.Name, strings.Join(generatorNames(), ", "))
+func buildTarget(ctx context.Context, stdout, stderr io.Writer, mod *module.Module, g *graph.Graph, tgt *schema.Target) error {
+	var gen build.Generator
+	if tgt.Plugin == "" {
+		source, err := targetPluginSource(mod, tgt)
+		if err != nil {
+			return err
+		}
+		var ok bool
+		gen, ok = generators[source]
+		if !ok {
+			return fmt.Errorf("%s: no code generator installed for legacy target %q (available: %s)", tgt.Addr(), source, strings.Join(generatorNames(), ", "))
+		}
+	} else {
+		client, err := openTargetPlugin(ctx, mod, tgt)
+		if err != nil {
+			return err
+		}
+		gen = &pluginruntime.Codegen{Client: client, Context: ctx}
+		files, generateErr := build.Run(gen, &build.Job{Module: mod, Graph: g, Target: tgt})
+		closeErr := client.Close()
+		if generateErr != nil {
+			return generateErr
+		}
+		if closeErr != nil {
+			return fmt.Errorf("%s: close plugin: %w", tgt.Addr(), closeErr)
+		}
+		return writeGeneratedTarget(stdout, stderr, mod, tgt, files)
 	}
 
 	files, err := build.Run(gen, &build.Job{Module: mod, Graph: g, Target: tgt})
 	if err != nil {
 		return err
 	}
+	return writeGeneratedTarget(stdout, stderr, mod, tgt, files)
+}
 
+func writeGeneratedTarget(stdout, stderr io.Writer, mod *module.Module, tgt *schema.Target, files []build.File) error {
 	outDir, err := build.OutputDir(mod, tgt)
 	if err != nil {
 		return err

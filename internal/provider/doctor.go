@@ -159,9 +159,9 @@ func BuildReport(ctx context.Context, p Provider, job *Job) (*Report, error) {
 func environmentChecks(job *Job) []Check {
 	var checks []Check
 
-	if job.Target.Auth != nil && job.Target.Auth.APIKeyEnv != "" {
+	if apiKeyEnv, ok := job.Target.ConfigString("api_key_env"); ok && apiKeyEnv != "" {
 		checks = append(checks, envCheck(
-			job.Target.Auth.APIKeyEnv,
+			apiKeyEnv,
 			fmt.Sprintf("%s authenticates against this platform", job.Target.Addr()),
 		))
 	}

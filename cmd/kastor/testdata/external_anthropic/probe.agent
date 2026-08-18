@@ -1,0 +1,4 @@
+agent "probe" {
+  description = "Exercises the external platform diff contract"
+  model       = model.fast
+}

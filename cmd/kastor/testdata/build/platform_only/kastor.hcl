@@ -1,7 +1,7 @@
 target "openai_assistants" {
   type = "platform"
 
-  auth {
+  config {
     api_key_env = "OPENAI_API_KEY"
   }
 }

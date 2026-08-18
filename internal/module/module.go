@@ -27,6 +27,7 @@ type Module struct {
 	Agents     []*schema.Agent
 	Tools      []*schema.Tool
 	Prompts    []*schema.Prompt
+	Plugins    []*schema.PluginRequirement
 	Models     []*schema.Model
 	Targets    []*schema.Target
 	MCPServers []*schema.MCPServer
@@ -37,9 +38,9 @@ type Module struct {
 // Symbol is one addressable block in the module's symbol table.
 type Symbol struct {
 	Addr  string // block address, e.g. "agent.weather"
-	Kind  string // agent | tool | prompt | model | target | mcp_server
+	Kind  string // agent | tool | prompt | plugin | model | target | mcp_server
 	File  string // declaring file, relative to the module root
-	Block any    // *schema.Agent, *schema.Tool, *schema.Prompt, *schema.Model, *schema.Target, or *schema.MCPServer
+	Block any
 }
 
 // Lookup resolves a block address against the module's symbol table.
@@ -75,8 +76,10 @@ func Load(root string) (*Module, error) {
 	for _, s := range mod.MCPServers {
 		errs = append(errs, mod.resolveMCPServer(s)...)
 	}
+	for _, t := range mod.Targets {
+		errs = append(errs, mod.resolveTargetPlugin(t)...)
+	}
 	errs = append(errs, mod.checkAuthCoverage()...)
-	errs = append(errs, mod.checkCredentialTargets()...)
 
 	if err := errors.Join(errs...); err != nil {
 		return nil, err
@@ -232,6 +235,11 @@ func (m *Module) loadFile(path, rel string) []error {
 		if err != nil {
 			return []error{fileErr(rel, err)}
 		}
+		for _, plugin := range project.Plugins {
+			if define("plugin", plugin.Addr(), plugin) {
+				m.Plugins = append(m.Plugins, plugin)
+			}
+		}
 		for _, mdl := range project.Models {
 			if define("model", mdl.Addr(), mdl) {
 				m.Models = append(m.Models, mdl)
@@ -249,6 +257,31 @@ func (m *Module) loadFile(path, rel string) []error {
 		}
 	}
 	return errs
+}
+
+// PluginRequirement resolves a target's explicit local plugin name to its
+// installation coordinates. Legacy v0.2 targets have an empty Plugin and are
+// intentionally absent from this lookup; the CLI compatibility adapter owns
+// their temporary label-based resolution.
+func (m *Module) PluginRequirement(localName string) (*schema.PluginRequirement, bool) {
+	sym, ok := m.symbols["plugin."+localName]
+	if !ok || sym.Kind != "plugin" {
+		return nil, false
+	}
+	plugin, ok := sym.Block.(*schema.PluginRequirement)
+	return plugin, ok
+}
+
+func (m *Module) resolveTargetPlugin(t *schema.Target) []error {
+	if t.Plugin == "" {
+		return nil
+	}
+	if _, ok := m.PluginRequirement(t.Plugin); ok {
+		return nil
+	}
+	file := m.symbols[t.Addr()].File
+	return []error{fmt.Errorf("%s: %s: plugin %q is not declared in kastor.required_plugins (declared plugins: %s)",
+		file, t.Addr(), t.Plugin, joinOrNone(m.pluginNames()))}
 }
 
 // resolveAgent checks every reference captured on an agent against the
@@ -400,94 +433,19 @@ func (m *Module) checkAuthCoverage() []error {
 	return errs
 }
 
-// claudeTargetName is the target label that selects the Claude Managed Agents
-// provider (SPEC.md §3.5). eveTargetName is the codegen target whose MCP
-// binding is an HTTP client, which is what puts it in the transport matrix.
-const (
-	claudeTargetName = "claude_agents"
-	eveTargetName    = "eve"
-)
-
-// checkCredentialTargets enforces the (scheme, target) matrix of SPEC.md §3.6
-// and the transport matrix above it, plus §3.5's rule that a target whose
-// servers use connection:// must declare the vault those credentials live in.
-//
-// The rejected (scheme, target) pairs are exactly the ones that would force
-// kastor to read a secret and transmit it: env:// on a platform target means
-// kastor resolving the variable and sending its value, and connection:// off
-// the platform means there is no platform store to match the id against.
-func (m *Module) checkCredentialTargets() []error {
-	referenced := map[string]bool{}
-	for _, t := range m.Tools {
-		if t.Source == nil || t.Source.Kind != "mcp" {
-			continue
-		}
-		if server, _, err := schema.ParseMCPURI(t.Source.URI); err == nil {
-			referenced[server] = true
-		}
-	}
-
-	var errs []error
-	for _, s := range m.MCPServers {
-		if !referenced[s.Name] {
-			continue // an unreferenced server is bound nowhere
-		}
-		file := m.symbols[s.Addr()].File
-
-		for _, tgt := range m.Targets {
-			// The transport matrix of §3.6: stdio is spawned by a generated
-			// langgraph project, but a platform dials a URL and eve's MCP
-			// binding is an HTTP client, so neither can reach a local process.
-			switch {
-			case s.Transport != "stdio":
-			case tgt.Type == "platform":
-				errs = append(errs, fmt.Errorf("%s: %s: transport \"stdio\" cannot be bound on %s; a platform dials a URL and cannot spawn a local process",
-					file, s.Addr(), tgt.Addr()))
-			case tgt.Name == eveTargetName:
-				errs = append(errs, fmt.Errorf("%s: %s: transport \"stdio\" cannot be bound on %s; the generated connection is an HTTP client — put an HTTP bridge in front of the server and declare its url",
-					file, s.Addr(), tgt.Addr()))
-			}
-
-			auth, ok := s.AuthFor(tgt.Addr())
-			if !ok {
-				continue
-			}
-			scheme, _, err := schema.ParseCredentialRef(auth.Ref)
-			if err != nil {
-				continue // already reported at parse time
-			}
-			switch scheme {
-			case schema.SchemeEnv:
-				// Rejected on claude_agents specifically, per §3.6's table:
-				// the platform's agent object accepts no credential, so
-				// honoring env:// would mean kastor reading the variable and
-				// transmitting its value. Other platform targets are not
-				// listed and are not rejected — target.memory dials nothing,
-				// so a binding on it is unused rather than wrong.
-				if tgt.Name == claudeTargetName {
-					errs = append(errs, fmt.Errorf("%s: %s: auth ref %q cannot be bound on %s; the platform's agent object accepts no credential and kastor never reads a credential value — use connection://<credential_id>",
-						file, s.Addr(), auth.Ref, tgt.Addr()))
-				}
-			case schema.SchemeConnection:
-				if tgt.Name != claudeTargetName {
-					errs = append(errs, fmt.Errorf("%s: %s: auth ref %q cannot be bound on %s; only %s holds platform connections — use env://<NAME>",
-						file, s.Addr(), auth.Ref, tgt.Addr(), "target."+claudeTargetName))
-					continue
-				}
-				if tgt.VaultID == "" {
-					errs = append(errs, fmt.Errorf("%s: %s: auth ref %q needs a vault to resolve against; %s must declare \"vault_id\"",
-						file, s.Addr(), auth.Ref, tgt.Addr()))
-				}
-			}
-		}
-	}
-	return errs
-}
-
 func (m *Module) mcpServerNames() []string {
 	names := make([]string, 0, len(m.MCPServers))
 	for _, s := range m.MCPServers {
 		names = append(names, s.Name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func (m *Module) pluginNames() []string {
+	names := make([]string, 0, len(m.Plugins))
+	for _, p := range m.Plugins {
+		names = append(names, p.Name)
 	}
 	sort.Strings(names)
 	return names

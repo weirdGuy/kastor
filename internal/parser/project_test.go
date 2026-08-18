@@ -22,6 +22,10 @@ func TestParseProjectFile(t *testing.T) {
 			name: "full project file with params, codegen and platform targets",
 			file: "valid_full.hcl",
 			want: &schema.ProjectFile{
+				Plugins: []*schema.PluginRequirement{
+					{Name: "langgraph", Source: "github.com/getkastordev/kastor-langgraph", Version: "~> 0.1"},
+					{Name: "assistants", Source: "example.com/acme/assistants", Version: "1.2.0"},
+				},
 				Models: []*schema.Model{
 					{
 						Name:     "fast",
@@ -42,12 +46,14 @@ func TestParseProjectFile(t *testing.T) {
 					{
 						Name:   "langgraph",
 						Type:   "codegen",
+						Plugin: "langgraph",
 						Output: "./gen/langgraph",
 					},
 					{
-						Name: "openai_assistants",
-						Type: "platform",
-						Auth: &schema.Auth{APIKeyEnv: "OPENAI_API_KEY"},
+						Name:   "openai_assistants",
+						Type:   "platform",
+						Plugin: "assistants",
+						Config: map[string]any{"api_key_env": "OPENAI_API_KEY"},
 					},
 				},
 			},
@@ -76,9 +82,9 @@ func TestParseProjectFile(t *testing.T) {
 						Output: "./gen/langgraph",
 					},
 					{
-						Name:    "claude_agents",
-						Type:    "platform",
-						VaultID: "vlt_011CZaBcDeFgHiJkLmNoPqRs",
+						Name:   "claude_agents",
+						Type:   "platform",
+						Config: map[string]any{"vault_id": "vlt_011CZaBcDeFgHiJkLmNoPqRs"},
 					},
 				},
 				MCPServers: []*schema.MCPServer{
@@ -136,9 +142,14 @@ func TestParseProjectFile(t *testing.T) {
 			wantErr: `target.langgraph: codegen target requires "output"`,
 		},
 		{
-			name:    "codegen target rejects auth block",
+			name:    "legacy target auth block has a migration error",
 			file:    "invalid_codegen_auth.hcl",
-			wantErr: `target.langgraph: codegen target does not allow "auth"`,
+			wantErr: `target.langgraph: target auth moved into the plugin-owned config block`,
+		},
+		{
+			name:    "legacy vault attribute has a migration error",
+			file:    "invalid_vault_id_wrong_target.hcl",
+			wantErr: `target.memory: "vault_id" moved into the plugin-owned config block`,
 		},
 		{
 			name:    "platform target rejects output attribute",
@@ -186,9 +197,9 @@ func TestParseProjectFile(t *testing.T) {
 			wantErr: `mcp_server.hubspot: declared more than once`,
 		},
 		{
-			name:    "vault_id is meaningless off the Claude target",
-			file:    "invalid_vault_id_wrong_target.hcl",
-			wantErr: `target.memory: "vault_id" is only valid on target "claude_agents"`,
+			name:    "plugin requirement source cannot be empty",
+			file:    "invalid_plugin_requirement.hcl",
+			wantErr: `plugin.langgraph: requirement needs a non-empty string "source"`,
 		},
 	}
 
@@ -220,5 +231,41 @@ func TestParseProjectFile_MissingFile(t *testing.T) {
 	_, err := parser.ParseProjectFile(filepath.Join("testdata", "does_not_exist.hcl"))
 	if err == nil {
 		t.Fatal("expected error for missing file, got nil")
+	}
+}
+
+func TestParseProjectTargetsMayShareAPlugin(t *testing.T) {
+	project, err := parser.ParseProject("instances.hcl", []byte(`
+kastor {
+  required_plugins {
+    langgraph = {
+      source  = "github.com/getkastordev/kastor-langgraph"
+      version = "~> 0.1"
+    }
+  }
+}
+
+target "preview" {
+  type   = "codegen"
+  plugin = "langgraph"
+  output = "./gen/preview"
+}
+
+target "production" {
+  type   = "codegen"
+  plugin = "langgraph"
+  output = "./gen/production"
+}
+`))
+	if err != nil {
+		t.Fatalf("ParseProject: %v", err)
+	}
+	if len(project.Targets) != 2 {
+		t.Fatalf("targets = %d, want 2", len(project.Targets))
+	}
+	for _, target := range project.Targets {
+		if target.Plugin != "langgraph" {
+			t.Errorf("%s plugin = %q, want langgraph", target.Addr(), target.Plugin)
+		}
 	}
 }

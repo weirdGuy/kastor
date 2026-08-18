@@ -1,10 +1,20 @@
+kastor {
+  required_plugins {
+    anthropic = {
+      source  = "github.com/getkastordev/kastor-anthropic"
+      version = "~> 0.1"
+    }
+  }
+}
+
 model "fast" {
   provider = "openai"
   id       = "gpt-4o-mini"
 }
 
-target "claude_agents" {
-  type = "platform"
+target "prod" {
+  type   = "platform"
+  plugin = "anthropic"
 }
 
 mcp_server "hubspot" {
