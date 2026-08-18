@@ -27,10 +27,17 @@ var nonEnv = regexp.MustCompile(`[^A-Za-z0-9]+`)
 // Open discovers and starts one declared plugin, then verifies that its
 // handshake identity and version satisfy the module requirement.
 func Open(ctx context.Context, localName string, requirement *schema.PluginRequirement) (Client, error) {
+	return OpenAt(ctx, "", localName, requirement)
+}
+
+// OpenAt discovers a declared plugin for a module root. Explicit development
+// overrides win; otherwise a committed lock is authoritative and the cached
+// executable is verified before it is started.
+func OpenAt(ctx context.Context, root, localName string, requirement *schema.PluginRequirement) (Client, error) {
 	if requirement == nil {
 		return nil, fmt.Errorf("plugin.%s: requirement is nil", localName)
 	}
-	executable, err := Discover(localName, requirement.Source)
+	executable, err := DiscoverAt(root, localName, requirement)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +61,39 @@ func Open(ctx context.Context, localName string, requirement *schema.PluginRequi
 // plugin directory, then PATH. The executable convention is the final source
 // path segment, e.g. github.com/getkastordev/kastor-eve → kastor-eve.
 func Discover(localName, source string) (string, error) {
-	envName := pluginEnvPrefix + strings.Trim(nonEnv.ReplaceAllString(strings.ToUpper(localName), "_"), "_")
+	return discoverOverride(localName, source, true)
+}
+
+// DiscoverAt resolves a plugin in production order: explicit development
+// overrides, a verified module lock, then PATH only for modules that have no
+// lock yet. A present lock is never bypassed implicitly.
+func DiscoverAt(root, localName string, requirement *schema.PluginRequirement) (string, error) {
+	if requirement == nil {
+		return "", fmt.Errorf("plugin.%s: requirement is nil", localName)
+	}
+	if resolved, err := discoverOverride(localName, requirement.Source, false); resolved != "" || err != nil {
+		return resolved, err
+	}
+	if root != "" {
+		resolved, err := LockedExecutable(root, localName, requirement)
+		if err == nil {
+			return resolved, nil
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+	}
+	binary := path.Base(requirement.Source)
+	resolved, err := exec.LookPath(binary)
+	if err != nil {
+		envName := pluginEnvironmentName(localName)
+		return "", fmt.Errorf("plugin.%s: executable %q is not installed; run `kastor init`, or for development add it to PATH, set %s, or set %s", localName, binary, pluginDirEnv, envName)
+	}
+	return resolved, nil
+}
+
+func discoverOverride(localName, source string, includePATH bool) (string, error) {
+	envName := pluginEnvironmentName(localName)
 	if override := os.Getenv(envName); override != "" {
 		return executableFile(override, envName)
 	}
@@ -68,11 +107,18 @@ func Discover(localName, source string) (string, error) {
 			return resolved, nil
 		}
 	}
+	if !includePATH {
+		return "", nil
+	}
 	resolved, err := exec.LookPath(binary)
 	if err != nil {
 		return "", fmt.Errorf("plugin.%s: executable %q not found; install it, add it to PATH, set %s, or set %s", localName, binary, pluginDirEnv, envName)
 	}
 	return resolved, nil
+}
+
+func pluginEnvironmentName(localName string) string {
+	return pluginEnvPrefix + strings.Trim(nonEnv.ReplaceAllString(strings.ToUpper(localName), "_"), "_")
 }
 
 func executableFile(candidate, source string) (string, error) {

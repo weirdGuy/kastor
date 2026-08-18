@@ -47,6 +47,7 @@ type Capabilities struct {
 	CredentialSchemes []string                   `json:"credential_schemes,omitempty"`
 	Config            map[string]ConfigAttribute `json:"config,omitempty"`
 	Check             bool                       `json:"check,omitempty"`
+	Scaffold          bool                       `json:"scaffold,omitempty"`
 }
 
 // ConfigAttribute is one plugin-owned target configuration field.
@@ -277,6 +278,19 @@ type GenerateResponse struct {
 	Diagnostics []Diagnostic `json:"diagnostics,omitempty"`
 }
 
+// ScaffoldRequest asks a plugin for its deterministic starter module. Name is
+// a user-facing project name when one was supplied by the host.
+type ScaffoldRequest struct {
+	Name              string `json:"name,omitempty"`
+	LocalName         string `json:"local_name"`
+	Source            string `json:"source"`
+	VersionConstraint string `json:"version_constraint"`
+}
+
+type ScaffoldResponse struct {
+	Files []File `json:"files,omitempty"`
+}
+
 // Object uses encoding/json's value model.
 type Object = map[string]any
 
@@ -370,6 +384,10 @@ type Validator interface {
 
 type Generator interface {
 	Generate(context.Context, *GenerateRequest) (*GenerateResponse, error)
+}
+
+type Scaffolder interface {
+	Scaffold(context.Context, *ScaffoldRequest) (*ScaffoldResponse, error)
 }
 
 type PlatformProvider interface {

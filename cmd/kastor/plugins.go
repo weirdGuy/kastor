@@ -24,7 +24,7 @@ const (
 
 // openPlugin is a narrow test seam around executable discovery and startup.
 // Production always uses pluginruntime.Open.
-var openPlugin = pluginruntime.Open
+var openPlugin = pluginruntime.OpenAt
 
 // targetPluginSource resolves a target instance to an implementation
 // identity. Explicit targets always resolve through required_plugins. An empty
@@ -195,7 +195,7 @@ func openTargetPlugin(ctx context.Context, mod *module.Module, tgt *schema.Targe
 	if !ok {
 		return nil, fmt.Errorf("%s: plugin %q is not declared in kastor.required_plugins", tgt.Addr(), tgt.Plugin)
 	}
-	client, err := openPlugin(ctx, tgt.Plugin, requirement)
+	client, err := openPlugin(ctx, mod.Root, tgt.Plugin, requirement)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", tgt.Addr(), err)
 	}

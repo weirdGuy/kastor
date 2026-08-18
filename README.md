@@ -8,6 +8,7 @@
 Define agents, tools, prompts, models, and plugin-backed targets in HCL. Validate the spec. Compile it to runnable framework code, or reconcile hosted agents with Terraform-style `plan` / `apply` / `state`.
 
 ```sh
+kastor init examples/weather
 kastor validate examples/weather
 kastor build examples/weather
 kastor plan examples/weather
@@ -23,7 +24,8 @@ Kastor is an early proof of concept.
 
 Working today:
 
-- scaffold a new module with `kastor init`
+- scaffold a new module with `kastor new`
+- install checksum-verified plugins with `kastor init` and a committed lock file
 - parse `.agent`, `.tool`, `.prompt`, and `kastor.hcl`
 - validate references and prompt variables
 - declare versioned target plugins separately from target instances
@@ -104,10 +106,12 @@ while the rest run unsupervised.
 
 ## Quickstart: start your own module
 
-`kastor init` scaffolds a minimal working module — one agent, one MCP tool, one prompt, a model, and a LangGraph codegen target — that validates and builds with zero edits:
+`kastor new` installs the LangGraph plugin, locks its exact release, and asks
+the plugin for a minimal working module. Framework templates live with their
+plugins instead of in the Kastor binary:
 
 ```sh
-kastor init demo
+kastor new demo
 cd demo
 kastor validate
 kastor build
@@ -115,7 +119,10 @@ kastor build
 
 The scaffolded agent answers a question by fetching web pages through the reference MCP fetch server (run via [`uvx`](https://docs.astral.sh/uv/), no API key needed). The scaffold's `README.md` walks through running the generated project end to end.
 
-`init` refuses a directory that already contains visible files; `--force` overwrites only the scaffold's own file names and keeps everything else.
+Choose another plugin-owned starter with `--from`, for example
+`kastor new --from github.com/getkastordev/kastor-eve demo`. `new` refuses a
+directory that already contains visible files; `--force` overwrites only the
+scaffold's own file names and keeps everything else.
 
 ## Quickstart: no credentials required
 
@@ -123,6 +130,7 @@ This path validates the example and runs `plan` / `apply` against the built-in i
 
 ```sh
 go build -o kastor ./cmd/kastor
+./kastor init examples/weather/
 ./kastor validate examples/weather/
 ./kastor plan examples/weather/
 ./kastor apply examples/weather/
@@ -582,25 +590,36 @@ Or download an archive for your platform from the [releases page](https://github
 
 ### Install target plugins
 
-An explicit target starts a separate executable whose name is the last segment
-of its source address. For the official plugins those binaries are
-`kastor-langgraph`, `kastor-eve`, and `kastor-anthropic`.
-
-Until tagged plugin releases and automatic plugin installation are available,
-build the needed repository and put the binary on your `PATH`:
+Declare plugins in `kastor.required_plugins`, then initialize the module:
 
 ```sh
-git clone https://github.com/getkastordev/kastor-langgraph
-cd kastor-langgraph
-go build -o ~/.local/bin/kastor-langgraph ./cmd/kastor-langgraph
+kastor init
+git add .kastor.lock.hcl
 ```
 
-Discovery order is:
+`init` resolves matching GitHub releases, downloads the current platform
+archive, verifies the publisher's `checksums.txt`, installs it in the user
+cache, and writes the exact version, protocol, platform assets, and checksums
+to `.kastor.lock.hcl`. Commit that file. Normal commands never fetch or change
+dependencies.
+
+For automation, use `kastor init --frozen` to reject lock drift. Add
+`--offline` to prove the verified cache is sufficient, or use
+`KASTOR_PLUGIN_CACHE_DIR`/`--plugin-cache` for an explicit CI cache location.
+Use `kastor init --upgrade` only when intentionally refreshing selections.
+
+Execution discovery order is:
 
 1. `KASTOR_PLUGIN_<LOCAL_NAME>` — an exact executable path, such as
    `KASTOR_PLUGIN_LANGGRAPH=/work/kastor-langgraph`.
 2. `KASTOR_PLUGIN_DIR` — a directory containing source-named executables.
-3. `PATH`.
+3. The lock-selected cached executable, verified against its release archive.
+4. `PATH`, only for an uninitialized module with no lock (migration fallback).
+
+The first two are explicit development overrides and never mutate the module's
+requirements or lock. When a lock exists, a missing or tampered cached binary
+is an error with a `kastor init` repair instruction; it is never silently
+replaced by an unrelated `PATH` executable.
 
 The core performs a protocol, source-identity, target-kind, and version
 handshake before sending the canonical module IR. Plugin stdout is reserved

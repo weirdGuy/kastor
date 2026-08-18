@@ -20,6 +20,10 @@ func (fakeHandler) Generate(_ context.Context, request *GenerateRequest) (*Gener
 	return &GenerateResponse{Files: []File{{Path: request.Target.Name + ".txt", Data: []byte("ok")}}}, nil
 }
 
+func (fakeHandler) Scaffold(context.Context, *ScaffoldRequest) (*ScaffoldResponse, error) {
+	return &ScaffoldResponse{Files: []File{{Path: "kastor.hcl", Data: []byte("ok")}}}, nil
+}
+
 func (fakeHandler) Read(_ context.Context, request *ReadRequest) (*ReadResponse, error) {
 	return &ReadResponse{Found: true, Remote: Object{"id": request.ID}}, nil
 }

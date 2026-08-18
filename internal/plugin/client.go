@@ -13,6 +13,7 @@ type Client interface {
 	Metadata() protocol.Metadata
 	Validate(context.Context, *protocol.ValidateRequest) (*protocol.ValidateResponse, error)
 	Generate(context.Context, *protocol.GenerateRequest) (*protocol.GenerateResponse, error)
+	Scaffold(context.Context, *protocol.ScaffoldRequest) (*protocol.ScaffoldResponse, error)
 	Read(context.Context, *protocol.ReadRequest) (*protocol.ReadResponse, error)
 	Create(context.Context, *protocol.CreateRequest) (*protocol.CreateResponse, error)
 	Update(context.Context, *protocol.UpdateRequest) error
