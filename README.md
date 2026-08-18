@@ -5,7 +5,7 @@
 
 **Kastor is a source-of-truth layer for AI agents.**
 
-Define agents, tools, prompts, models, and targets in HCL. Validate the spec. Compile it to runnable framework code, or reconcile hosted agents with Terraform-style `plan` / `apply` / `state`.
+Define agents, tools, prompts, models, and plugin-backed targets in HCL. Validate the spec. Compile it to runnable framework code, or reconcile hosted agents with Terraform-style `plan` / `apply` / `state`.
 
 ```sh
 kastor validate examples/weather
@@ -26,10 +26,11 @@ Working today:
 - scaffold a new module with `kastor init`
 - parse `.agent`, `.tool`, `.prompt`, and `kastor.hcl`
 - validate references and prompt variables
+- declare versioned target plugins separately from target instances
 - build runnable LangGraph and eve projects
 - require human approval for selected tools, portably across LangGraph, eve, and Claude Managed Agents
 - run `kastor plan` / `kastor apply` / `kastor destroy` against the built-in in-memory platform
-- reconcile hosted [Claude Managed Agents](#quickstart-hosted-claude-agents) with `target "claude_agents"`
+- reconcile hosted [Claude Managed Agents](#quickstart-hosted-claude-agents) through the Anthropic target plugin
 - local state file, three-way diffs, and drift detection
 - [VS Code syntax highlighting and file icons](#vs-code-support)
 - examples: [weather agent](examples/weather), [content scheduler](examples/scheduler), [support triage](examples/support-triage)
@@ -59,7 +60,9 @@ framework code      hosted agents
 (LangGraph, eve)    (Claude Managed Agents)
 ```
 
-Kastor has two paths:
+Kastor has two paths. Targets choose an implementation explicitly through
+`kastor.required_plugins`; their labels remain ordinary module-local instance
+names:
 
 - `kastor build` compiles a Kastor module into runnable framework code.
 - `kastor plan` / `kastor apply` reconciles long-lived hosted agents with state, diffs, and drift detection.
@@ -185,8 +188,9 @@ Three things worth knowing:
 
 ## Quickstart: hosted Claude agents
 
-This is the hosted path: `target "claude_agents"` reconciles agents in your
-Anthropic organization through Claude Managed Agents. Unlike `memory`, `apply`
+This is the hosted path: a platform target selecting the Anthropic plugin
+reconciles agents in your Anthropic organization through Claude Managed Agents.
+Unlike the memory plugin, `apply`
 here creates real remote objects, and `destroy` **archives them irreversibly** —
 read [Destroying a Claude agent](#destroying-a-claude-agent) before you run it.
 
@@ -199,18 +203,28 @@ Write a module — one project file, one agent, two tools, one prompt:
 
 ```hcl
 # kastor.hcl
+kastor {
+  required_plugins {
+    anthropic = {
+      source  = "github.com/getkastor/kastor-anthropic"
+      version = "~> 0.1"
+    }
+  }
+}
+
 model "haiku" {
   provider = "anthropic"
   id       = "claude-haiku-4-5"
 }
 
 target "claude_agents" {
-  type     = "platform"
-  vault_id = "vlt_011CZkZDLs7fYzm1hXNPeRjv"
+	type   = "platform"
+	plugin = "anthropic"
 
-  auth {
-    api_key_env = "ANTHROPIC_API_KEY"
-  }
+	config {
+		api_key_env = "ANTHROPIC_API_KEY"
+		vault_id    = "vlt_011CZkZDLs7fYzm1hXNPeRjv"
+	}
 }
 
 # The MCP server tool.tavily_search binds to. Declaring it is what makes

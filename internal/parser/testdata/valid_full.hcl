@@ -1,3 +1,16 @@
+kastor {
+  required_plugins {
+    langgraph = {
+      source  = "github.com/getkastor/kastor-langgraph"
+      version = "~> 0.1"
+    }
+    assistants = {
+      source  = "example.com/acme/assistants"
+      version = "1.2.0"
+    }
+  }
+}
+
 model "fast" {
   provider = "openai"
   id       = "gpt-4o-mini"
@@ -15,13 +28,15 @@ model "smart" {
 
 target "langgraph" {
   type   = "codegen"
+  plugin = "langgraph"
   output = "./gen/langgraph"
 }
 
 target "openai_assistants" {
-  type = "platform"
+  type   = "platform"
+  plugin = "assistants"
 
-  auth {
+  config {
     api_key_env = "OPENAI_API_KEY"
   }
 }

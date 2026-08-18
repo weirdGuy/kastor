@@ -133,7 +133,7 @@ func TestInitCommandScaffoldWorks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("validate Execute() error = %v\noutput:\n%s", err, out)
 	}
-	if !strings.Contains(out, "1 agent, 1 tool, 1 prompt, 1 model, 1 target") {
+	if !strings.Contains(out, "1 agent, 1 tool, 1 prompt, 1 plugin, 1 model, 1 target") {
 		t.Errorf("validate output missing module summary:\n%s", out)
 	}
 

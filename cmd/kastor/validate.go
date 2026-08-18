@@ -48,6 +48,9 @@ func compileModule(stderr io.Writer, dir string) (*module.Module, *graph.Graph, 
 	mod, err := module.Load(dir)
 	var g *graph.Graph
 	if err == nil {
+		err = validateTargetPlugins(mod)
+	}
+	if err == nil {
 		g, err = graph.Build(mod)
 	}
 	if err != nil {
@@ -106,6 +109,7 @@ func moduleSummary(mod *module.Module) string {
 		countNoun(len(mod.Agents), "agent"),
 		countNoun(len(mod.Tools), "tool"),
 		countNoun(len(mod.Prompts), "prompt"),
+		countNoun(len(mod.Plugins), "plugin"),
 		countNoun(len(mod.Models), "model"),
 		countNoun(len(mod.Targets), "target"),
 	}, ", ")

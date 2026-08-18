@@ -18,14 +18,14 @@ import (
 	"github.com/weirdGuy/kastor/internal/schema"
 )
 
-// generators maps a codegen target's name to its framework generator: the
-// target label doubles as the framework selector (SPEC.md §3.5 has no
-// separate framework attribute). A codegen target whose name has no entry
-// here is a codegen error at build time, not a validation error — the block
-// itself is valid spec.
+// generators is the temporary in-process adapter for codegen plugins. Stable
+// source addresses drive explicit targets; short keys preserve v0.2 modules
+// until the executable plugin protocol replaces this registry (KAS-77).
 var generators = map[string]build.Generator{
-	"eve":       eve.Generator{},
-	"langgraph": langgraph.Generator{},
+	"eve":                 eve.Generator{},
+	evePluginSource:       eve.Generator{},
+	"langgraph":           langgraph.Generator{},
+	langgraphPluginSource: langgraph.Generator{},
 }
 
 func newBuildCmd() *cobra.Command {
@@ -115,9 +115,13 @@ func selectTargets(mod *module.Module, name string) ([]*schema.Target, error) {
 // output directory. Generation failures keep the default exit code 1
 // (codegen errors); sync failures are IO errors, exit 2.
 func buildTarget(stdout, stderr io.Writer, mod *module.Module, g *graph.Graph, tgt *schema.Target) error {
-	gen, ok := generators[tgt.Name]
+	source, err := targetPluginSource(mod, tgt)
+	if err != nil {
+		return err
+	}
+	gen, ok := generators[source]
 	if !ok {
-		return fmt.Errorf("%s: no code generator named %q (available: %s)", tgt.Addr(), tgt.Name, strings.Join(generatorNames(), ", "))
+		return fmt.Errorf("%s: no code generator installed for plugin %q (available: %s)", tgt.Addr(), source, strings.Join(generatorNames(), ", "))
 	}
 
 	files, err := build.Run(gen, &build.Job{Module: mod, Graph: g, Target: tgt})

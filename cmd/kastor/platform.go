@@ -14,12 +14,14 @@ import (
 	"github.com/weirdGuy/kastor/internal/state"
 )
 
-// providerFactories maps a platform target's name to its provider factory:
-// the target label doubles as the provider selector, exactly like codegen
-// target names select generators (see cmd/kastor/build.go).
+// providerFactories is the temporary in-process adapter for platform plugins.
+// Stable source addresses drive explicit targets; short keys preserve v0.2
+// modules until the executable plugin protocol replaces this registry.
 var providerFactories = map[string]func(*schema.Target) (provider.Provider, error){
-	"claude_agents": claude.Factory,
-	"memory":        memory.Factory,
+	"claude_agents":    claude.Factory,
+	claudePluginSource: claude.Factory,
+	"memory":           memory.Factory,
+	memoryPluginSource: memory.Factory,
 }
 
 // platformJob is one reconcile unit: a platform target with its resolved
@@ -46,7 +48,7 @@ func preparePlatform(stderr io.Writer, dir, targetName string) (jobs []*platform
 	// Resolve providers before locking: a missing provider needs no lock.
 	var resolved []*platformJob
 	for _, tgt := range targets {
-		p, err := providerFor(tgt)
+		p, err := providerFor(mod, tgt)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -112,11 +114,15 @@ func platformNames(mod *module.Module) []string {
 	return names
 }
 
-// providerFor resolves a platform target's provider from the registry.
-func providerFor(tgt *schema.Target) (provider.Provider, error) {
-	factory, ok := providerFactories[tgt.Name]
+// providerFor resolves a platform target's plugin through its declared source.
+func providerFor(mod *module.Module, tgt *schema.Target) (provider.Provider, error) {
+	source, err := targetPluginSource(mod, tgt)
+	if err != nil {
+		return nil, err
+	}
+	factory, ok := providerFactories[source]
 	if !ok {
-		return nil, fmt.Errorf("%s: no platform provider named %q (available: %s)", tgt.Addr(), tgt.Name, joinOrNone(providerNames()))
+		return nil, fmt.Errorf("%s: no platform provider installed for plugin %q (available: %s)", tgt.Addr(), source, joinOrNone(providerNames()))
 	}
 	p, err := factory(tgt)
 	if err != nil {

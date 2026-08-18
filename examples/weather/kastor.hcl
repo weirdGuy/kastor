@@ -1,3 +1,20 @@
+kastor {
+  required_plugins {
+    langgraph = {
+      source  = "github.com/getkastor/kastor-langgraph"
+      version = "~> 0.1"
+    }
+    eve = {
+      source  = "github.com/getkastor/kastor-eve"
+      version = "~> 0.1"
+    }
+    memory = {
+      source  = "github.com/getkastor/kastor-memory"
+      version = "~> 0.1"
+    }
+  }
+}
+
 model "fast" {
   provider = "openai"
   id       = "gpt-4o-mini"
@@ -11,12 +28,14 @@ model "fast" {
 # Codegen target -> exercises the module-walk skip of target output paths (#6)
 target "langgraph" {
   type   = "codegen"
+  plugin = "langgraph"
   output = "./gen/langgraph"
 }
 
 # Codegen target -> `kastor build` emits one eve project per root agent
 target "eve" {
   type   = "codegen"
+  plugin = "eve"
   output = "./gen/eve"
 }
 
@@ -25,7 +44,8 @@ target "eve" {
 # `target "claude_agents"` once the Claude Managed Agents provider ships
 # (SPEC.md section 8).
 target "memory" {
-  type = "platform"
+  type   = "platform"
+  plugin = "memory"
 }
 
 # The MCP server tool.web_search binds to. Declaring it is what makes

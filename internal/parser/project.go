@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"sort"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
@@ -18,9 +19,20 @@ import (
 // projectFileHCL mirrors the raw HCL layout of a project file. It exists only
 // as a decode target; callers get the cleaned-up schema.ProjectFile.
 type projectFileHCL struct {
+	Kastor     *kastorHCL     `hcl:"kastor,block"`
 	Models     []modelHCL     `hcl:"model,block"`
 	Targets    []targetHCL    `hcl:"target,block"`
 	MCPServers []mcpServerHCL `hcl:"mcp_server,block"`
+}
+
+type kastorHCL struct {
+	RequiredPlugins *requiredPluginsHCL `hcl:"required_plugins,block"`
+}
+
+// requiredPluginsHCL is open because each attribute name is a module-local
+// plugin name and its object value contains the installation coordinates.
+type requiredPluginsHCL struct {
+	Body hcl.Body `hcl:",remain"`
 }
 
 type modelHCL struct {
@@ -37,15 +49,13 @@ type paramsHCL struct {
 }
 
 type targetHCL struct {
-	Label   string   `hcl:"name,label"`
-	Type    string   `hcl:"type"`
-	Output  *string  `hcl:"output"`
-	VaultID *string  `hcl:"vault_id"`
-	Auth    *authHCL `hcl:"auth,block"`
-}
-
-type authHCL struct {
-	APIKeyEnv string `hcl:"api_key_env"`
+	Label         string     `hcl:"name,label"`
+	Type          string     `hcl:"type"`
+	Plugin        *string    `hcl:"plugin,optional"`
+	Output        *string    `hcl:"output"`
+	Config        *paramsHCL `hcl:"config,block"`
+	LegacyVaultID *string    `hcl:"vault_id,optional"`
+	LegacyAuth    *paramsHCL `hcl:"auth,block"`
 }
 
 // mcpServerHCL mirrors an mcp_server block (SPEC.md §3.6). Every attribute is
@@ -89,6 +99,13 @@ func ParseProject(filename string, src []byte) (*schema.ProjectFile, error) {
 	}
 
 	project := &schema.ProjectFile{}
+	if raw.Kastor != nil && raw.Kastor.RequiredPlugins != nil {
+		plugins, err := decodeRequiredPlugins(raw.Kastor.RequiredPlugins.Body)
+		if err != nil {
+			return nil, err
+		}
+		project.Plugins = plugins
+	}
 
 	seenModels := map[string]bool{}
 	for _, m := range raw.Models {
@@ -122,15 +139,28 @@ func ParseProject(filename string, src []byte) (*schema.ProjectFile, error) {
 			return nil, fmt.Errorf("%s: declared more than once", target.Addr())
 		}
 		seenTargets[target.Name] = true
+		if t.LegacyVaultID != nil {
+			return nil, fmt.Errorf("%s: \"vault_id\" moved into the plugin-owned config block; use config { vault_id = ... }", target.Addr())
+		}
+		if t.LegacyAuth != nil {
+			return nil, fmt.Errorf("%s: target auth moved into the plugin-owned config block; move its attributes under config { ... }", target.Addr())
+		}
 
 		if t.Output != nil {
 			target.Output = *t.Output
 		}
-		if t.Auth != nil {
-			target.Auth = &schema.Auth{APIKeyEnv: t.Auth.APIKeyEnv}
+		if t.Plugin != nil {
+			target.Plugin = *t.Plugin
+			if target.Plugin == "" {
+				return nil, fmt.Errorf("%s: \"plugin\" cannot be empty; name an entry from kastor.required_plugins", target.Addr())
+			}
 		}
-		if t.VaultID != nil {
-			target.VaultID = *t.VaultID
+		if t.Config != nil {
+			config, err := decodeLiteralAttributes(target.Addr(), "config attribute", t.Config.Body)
+			if err != nil {
+				return nil, err
+			}
+			target.Config = config
 		}
 
 		switch target.Type {
@@ -138,11 +168,7 @@ func ParseProject(filename string, src []byte) (*schema.ProjectFile, error) {
 			if target.Output == "" {
 				return nil, fmt.Errorf("%s: codegen target requires \"output\"", target.Addr())
 			}
-			if target.Auth != nil {
-				return nil, fmt.Errorf("%s: codegen target does not allow \"auth\"", target.Addr())
-			}
 		case "platform":
-			// auth is optional; credentials may come from the environment
 			if t.Output != nil {
 				return nil, fmt.Errorf("%s: platform target does not allow \"output\"", target.Addr())
 			}
@@ -150,17 +176,6 @@ func ParseProject(filename string, src []byte) (*schema.ProjectFile, error) {
 			return nil, fmt.Errorf("%s: invalid type %q (expected \"codegen\" or \"platform\")", target.Addr(), target.Type)
 		}
 
-		// SPEC.md §3.5: vault_id names the Anthropic vault backing this
-		// target's connection:// refs, so it is meaningless anywhere else —
-		// and meaningless fields are errors, not ignored.
-		if t.VaultID != nil {
-			if target.Name != claudeTargetName {
-				return nil, fmt.Errorf("%s: \"vault_id\" is only valid on target %q, which selects the Claude Managed Agents provider", target.Addr(), claudeTargetName)
-			}
-			if target.VaultID == "" {
-				return nil, fmt.Errorf("%s: \"vault_id\" cannot be empty; omit the attribute instead", target.Addr())
-			}
-		}
 		project.Targets = append(project.Targets, target)
 	}
 
@@ -180,9 +195,55 @@ func ParseProject(filename string, src []byte) (*schema.ProjectFile, error) {
 	return project, nil
 }
 
-// claudeTargetName is the target label that selects the Claude Managed Agents
-// provider (SPEC.md §3.5: a platform target's label selects its provider).
-const claudeTargetName = "claude_agents"
+func decodeRequiredPlugins(body hcl.Body) ([]*schema.PluginRequirement, error) {
+	attrs, diags := body.JustAttributes()
+	if diags.HasErrors() {
+		return nil, diags
+	}
+	names := make([]string, 0, len(attrs))
+	for name := range attrs {
+		names = append(names, name)
+	}
+	sort.Slice(names, func(i, j int) bool {
+		return attrs[names[i]].NameRange.Start.Byte < attrs[names[j]].NameRange.Start.Byte
+	})
+
+	plugins := make([]*schema.PluginRequirement, 0, len(names))
+	for _, name := range names {
+		val, diags := attrs[name].Expr.Value(nil)
+		if diags.HasErrors() {
+			return nil, diags
+		}
+		decoded, err := ctyToGo(val)
+		if err != nil {
+			return nil, fmt.Errorf("plugin.%s: %w", name, err)
+		}
+		fields, ok := decoded.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("plugin.%s: requirement must be an object with \"source\" and \"version\"", name)
+		}
+		fieldNames := make([]string, 0, len(fields))
+		for field := range fields {
+			fieldNames = append(fieldNames, field)
+		}
+		sort.Strings(fieldNames)
+		for _, field := range fieldNames {
+			if field != "source" && field != "version" {
+				return nil, fmt.Errorf("plugin.%s: unsupported requirement attribute %q", name, field)
+			}
+		}
+		source, sourceOK := fields["source"].(string)
+		version, versionOK := fields["version"].(string)
+		if !sourceOK || source == "" {
+			return nil, fmt.Errorf("plugin.%s: requirement needs a non-empty string \"source\"", name)
+		}
+		if !versionOK || version == "" {
+			return nil, fmt.Errorf("plugin.%s: requirement needs a non-empty string \"version\"", name)
+		}
+		plugins = append(plugins, &schema.PluginRequirement{Name: name, Source: source, Version: version})
+	}
+	return plugins, nil
+}
 
 // decodeMCPServer decodes one mcp_server block and enforces the per-transport
 // field rules of SPEC.md §3.6. Fields meaningless for a transport are errors,
@@ -257,6 +318,10 @@ func decodeMCPServer(s mcpServerHCL) (*schema.MCPServer, error) {
 
 // decodeParams converts a params block into plain Go values.
 func decodeParams(addr string, body hcl.Body) (map[string]any, error) {
+	return decodeLiteralAttributes(addr, "param", body)
+}
+
+func decodeLiteralAttributes(addr, fieldKind string, body hcl.Body) (map[string]any, error) {
 	attrs, diags := body.JustAttributes()
 	if diags.HasErrors() {
 		return nil, diags
@@ -270,7 +335,7 @@ func decodeParams(addr string, body hcl.Body) (map[string]any, error) {
 		}
 		goVal, err := ctyToGo(val)
 		if err != nil {
-			return nil, fmt.Errorf("%s: param %q: %w", addr, name, err)
+			return nil, fmt.Errorf("%s: %s %q: %w", addr, fieldKind, name, err)
 		}
 		params[name] = goVal
 	}

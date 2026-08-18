@@ -222,32 +222,17 @@ func TestLoadErrors(t *testing.T) {
 			},
 		},
 		{
-			name: "credential schemes are checked against the target they bind on",
-			dir:  "bad_credential_targets",
-			wantErrs: []string{
-				`mcp_server.hubspot: auth ref "connection://cred_011CZkZDLs7fYzm1hXNPeRjv" needs a vault to resolve against; target.claude_agents must declare "vault_id"`,
-				`mcp_server.airtable: auth ref "env://AIRTABLE_TOKEN" cannot be bound on target.claude_agents`,
-			},
-		},
-		{
-			name: "a stdio server cannot be bound on a platform target",
-			dir:  "stdio_on_platform",
-			wantErrs: []string{
-				`mcp_server.fetch: transport "stdio" cannot be bound on target.claude_agents`,
-			},
-		},
-		{
-			name: "a stdio server cannot be bound on the eve target",
-			dir:  "stdio_on_eve",
-			wantErrs: []string{
-				`mcp_server.fetch: transport "stdio" cannot be bound on target.eve; the generated connection is an HTTP client`,
-			},
-		},
-		{
 			name: "auth targets are resolved like any other reference",
 			dir:  "unknown_auth_target",
 			wantErrs: []string{
 				`kastor.hcl: mcp_server.hubspot: auth block 1: unknown reference target.ghost (declared targets: target.langgraph)`,
+			},
+		},
+		{
+			name: "target plugin selector must name a required plugin",
+			dir:  "unknown_plugin_selector",
+			wantErrs: []string{
+				`kastor.hcl: target.python: plugin "langgraph" is not declared in kastor.required_plugins (declared plugins: none declared)`,
 			},
 		},
 	}
@@ -262,6 +247,20 @@ func TestLoadErrors(t *testing.T) {
 				if !strings.Contains(err.Error(), want) {
 					t.Errorf("Load error = %q\nwant substring %q", err, want)
 				}
+			}
+		})
+	}
+}
+
+func TestLoadLeavesPluginCapabilitiesToTheAdapter(t *testing.T) {
+	for _, dir := range []string{"bad_credential_targets", "stdio_on_platform", "stdio_on_eve"} {
+		t.Run(dir, func(t *testing.T) {
+			mod, err := module.Load(filepath.Join("testdata", dir))
+			if err != nil {
+				t.Fatalf("Load: plugin-owned capability checks leaked into core module validation: %v", err)
+			}
+			if len(mod.Plugins) != 1 || mod.Targets[0].Plugin == "" {
+				t.Fatalf("Load: explicit plugin requirement/selector was not retained: %#v, %#v", mod.Plugins, mod.Targets)
 			}
 		})
 	}

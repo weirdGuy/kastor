@@ -118,10 +118,10 @@ func TestFactory(t *testing.T) {
 		t.Errorf("Factory on a plain platform target: %v, %v; want a provider, nil", p, err)
 	}
 
-	// Negative: auth is meaningless on an in-memory platform and must be
+	// Negative: config is meaningless on an in-memory platform and must be
 	// rejected, not ignored.
-	_, err = Factory(&schema.Target{Name: "memory", Type: "platform", Auth: &schema.Auth{APIKeyEnv: "NOPE"}})
-	if err == nil || !strings.Contains(err.Error(), "auth") {
-		t.Errorf("Factory with auth: err = %v, want error naming the auth block", err)
+	_, err = Factory(&schema.Target{Name: "memory", Type: "platform", Config: map[string]any{"api_key_env": "NOPE"}})
+	if err == nil || !strings.Contains(err.Error(), "config") {
+		t.Errorf("Factory with config: err = %v, want error naming config", err)
 	}
 }

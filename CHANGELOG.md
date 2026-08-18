@@ -12,6 +12,17 @@ v0 exit criteria KAS-36 are met.
 
 ### Added
 
+- Explicit target plugin requirements and selectors (KAS-76)
+
+  Project files can declare `kastor.required_plugins` entries with stable
+  source and version coordinates, and each target can select one with
+  `plugin`. Target labels are now instance identity rather than implementation
+  selection. Target-specific settings live in an opaque `config` block owned
+  by the selected plugin; core parsing and module validation no longer contain
+  LangGraph, eve, or Claude capability matrices. Existing v0.2 label-based
+  targets remain temporary CLI aliases, while legacy target `auth` and
+  top-level `vault_id` receive migration errors.
+
 - `requires_approval` on agent blocks (KAS-66)
 
   `tools` remains the grant; `requires_approval = [tool.x]` narrows granted
@@ -48,7 +59,7 @@ v0 exit criteria KAS-36 are met.
   display name is nullable and non-unique on the platform) but output should
   still be readable.
 
-- `mcp_server` blocks, credential references, and `vault_id` (KAS-63)
+- `mcp_server` blocks, credential references, and `config.vault_id` (KAS-63)
 
   `mcp://<server>/<tool>` now resolves against a declared `mcp_server` block, so
   an unknown server is a compile error instead of a run-time failure. Servers
@@ -56,8 +67,8 @@ v0 exit criteria KAS-36 are met.
   whose `ref` names *where* a credential lives (`env://NAME` or
   `connection://<credential_id>`) — never its value. `auth` blocks may be bound
   per target, which is what lets one server be authenticated on both the codegen
-  and the platform path. `target "claude_agents"` gains `vault_id`, read only by
-  `doctor`.
+  and the platform path. The Anthropic plugin's target config gains `vault_id`,
+  read only by `doctor`.
 
 - The `langgraph` target generates `mcp_servers.json` from the module's
   `mcp_server` blocks (KAS-65)

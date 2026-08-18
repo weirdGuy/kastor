@@ -227,8 +227,8 @@ func TestPlanRejectsUnappliableClaudeModule(t *testing.T) {
 target "claude_agents" {
   type = "platform"
 
-  auth {
-    api_key_env = "ANTHROPIC_API_KEY"
+	config {
+		api_key_env = "ANTHROPIC_API_KEY"
   }
 }
 `,
@@ -249,8 +249,8 @@ target "claude_agents" {
 target "claude_agents" {
   type = "platform"
 
-  auth {
-    api_key_env = "ANTHROPIC_API_KEY"
+	config {
+		api_key_env = "ANTHROPIC_API_KEY"
   }
 }
 `,
@@ -354,7 +354,7 @@ func TestPlatformCommandErrors(t *testing.T) {
 			args:     []string{"plan"},
 			dir:      "testdata/platform_memory_auth",
 			wantCode: 1,
-			wantOut:  []string{"target.memory", "auth block found", "in-memory platform takes no credentials"},
+			wantOut:  []string{"target.memory", `plugin "memory"`, `does not support config attribute "api_key_env"`},
 		},
 		{
 			name:     "invalid module never plans",

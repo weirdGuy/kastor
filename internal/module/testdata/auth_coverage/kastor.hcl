@@ -9,8 +9,11 @@ target "langgraph" {
 }
 
 target "claude_agents" {
-  type     = "platform"
-  vault_id = "vlt_011CZaBcDeFgHiJkLmNoPqRs"
+  type = "platform"
+
+  config {
+    vault_id = "vlt_011CZaBcDeFgHiJkLmNoPqRs"
+  }
 }
 
 mcp_server "hubspot" {

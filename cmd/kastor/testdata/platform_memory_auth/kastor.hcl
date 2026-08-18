@@ -3,12 +3,12 @@ model "fast" {
   id       = "gpt-4o-mini"
 }
 
-# Invalid: auth is meaningless on the in-memory platform and must be an
+# Invalid: config is meaningless on the in-memory platform and must be an
 # error, not ignored.
 target "memory" {
   type = "platform"
 
-  auth {
+  config {
     api_key_env = "NOPE"
   }
 }

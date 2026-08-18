@@ -4,11 +4,11 @@ model "fast" {
 }
 
 target "claude_agents" {
-  type     = "platform"
-  vault_id = "vlt_011CZaBcDeFgHiJkLmNoPqRs"
+  type = "platform"
 
-  auth {
+  config {
     api_key_env = "KASTOR_DOCTOR_TEST_KEY"
+    vault_id    = "vlt_011CZaBcDeFgHiJkLmNoPqRs"
   }
 }
 

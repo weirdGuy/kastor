@@ -117,7 +117,8 @@ covers is the remote read and the tool-permission check against a real agent
 object — the credential path is covered offline against the fake vault, since
 exercising it live would mean creating and expiring a real vault credential per
 run. If you have a vault to hand, the fuller manual check is worth one pass:
-add `vault_id` and a `connection://` ref to the copied module, run `doctor`
+add `vault_id` inside the Anthropic target's `config` block and a
+`connection://` ref to the copied module, run `doctor`
 before authorizing the connection (expect `✗`, exit 1), authorize it and re-run
 (expect exit 0), then re-run with the vault host blocked (expect `? could not
 verify`, never "does not exist").

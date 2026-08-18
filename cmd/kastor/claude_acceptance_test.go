@@ -72,9 +72,9 @@ func TestClaudeManagedAgentsAcceptance(t *testing.T) {
 	}
 
 	realProvider, err := realFactory(&schema.Target{
-		Name: claudeAcceptanceTarget,
-		Type: "platform",
-		Auth: &schema.Auth{APIKeyEnv: "ANTHROPIC_API_KEY"},
+		Name:   claudeAcceptanceTarget,
+		Type:   "platform",
+		Config: map[string]any{"api_key_env": "ANTHROPIC_API_KEY"},
 	})
 	if err != nil {
 		t.Fatalf("construct real Claude provider: %v", err)

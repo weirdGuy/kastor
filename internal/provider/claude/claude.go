@@ -37,7 +37,7 @@ var (
 type Provider struct {
 	client       anthropic.Client
 	authEnv      string
-	vaultID      string // target.vault_id; read by Check only (SPEC.md §5.3)
+	vaultID      string // target config vault_id; read by Check only (SPEC.md §5.3)
 	sleep        func(context.Context, time.Duration) error
 	createPacer  *requestPacer
 	readPacer    *requestPacer
