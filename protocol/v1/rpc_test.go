@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"os"
+	"strings"
 	"testing"
+	"time"
 )
 
 type fakeHandler struct{}
@@ -84,5 +87,65 @@ func TestBoundedBufferKeepsTail(t *testing.T) {
 	}
 	if got := buffer.String(); got != "cdef" {
 		t.Fatalf("String() = %q", got)
+	}
+}
+
+func TestClientRunsExecutablePlugin(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	client, err := startCommand(ctx, executable, []string{"-test.run=TestProtocolHelperProcess", "--", "serve"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := client.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	if got := client.Metadata().Source; got != "example.test/fake" {
+		t.Fatalf("source = %q", got)
+	}
+	response, err := client.Generate(ctx, &GenerateRequest{Target: &Target{Name: "python"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Files) != 1 || response.Files[0].Path != "python.txt" {
+		t.Fatalf("response = %#v", response)
+	}
+}
+
+func TestClientReportsPluginCrashStderr(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err = startCommand(ctx, executable, []string{"-test.run=TestProtocolHelperProcess", "--", "crash"})
+	if err == nil || !strings.Contains(err.Error(), "deliberate helper crash") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestProtocolHelperProcess(t *testing.T) {
+	marker := ""
+	for i, argument := range os.Args {
+		if argument == "--" && i+1 < len(os.Args) {
+			marker = os.Args[i+1]
+			break
+		}
+	}
+	switch marker {
+	case "serve":
+		if err := Serve(os.Stdin, os.Stdout, fakeHandler{}); err != nil {
+			t.Fatal(err)
+		}
+	case "crash":
+		_, _ = os.Stderr.WriteString("deliberate helper crash\n")
+		os.Exit(23)
 	}
 }

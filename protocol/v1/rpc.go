@@ -222,8 +222,12 @@ type Client struct {
 // Start launches executable with the "serve" argument and performs the
 // mandatory metadata handshake.
 func Start(ctx context.Context, executable string, args ...string) (*Client, error) {
-	lifetime, cancel := context.WithCancel(context.Background())
 	commandArgs := append([]string{"serve"}, args...)
+	return startCommand(ctx, executable, commandArgs)
+}
+
+func startCommand(ctx context.Context, executable string, commandArgs []string) (*Client, error) {
+	lifetime, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(lifetime, executable, commandArgs...)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
