@@ -25,10 +25,11 @@ type fakePluginClient struct {
 
 func newFakePluginClient(source string, kind protocol.Kind) *fakePluginClient {
 	return &fakePluginClient{metadata: protocol.Metadata{
-		Protocol: protocol.Version,
-		Source:   source,
-		Version:  "0.1.0",
-		Kinds:    []protocol.Kind{kind},
+		Protocol:     protocol.Version,
+		Source:       source,
+		Version:      "0.1.0",
+		Kinds:        []protocol.Kind{kind},
+		Capabilities: protocol.Capabilities{Scaffold: true},
 	}}
 }
 
@@ -39,7 +40,7 @@ func useFakePlugins(t *testing.T, clients ...*fakePluginClient) {
 		bySource[client.metadata.Source] = client
 	}
 	previous := openPlugin
-	openPlugin = func(_ context.Context, localName string, requirement *schema.PluginRequirement) (pluginruntime.Client, error) {
+	openPlugin = func(_ context.Context, _ string, localName string, requirement *schema.PluginRequirement) (pluginruntime.Client, error) {
 		client := bySource[requirement.Source]
 		if client == nil {
 			return nil, fmt.Errorf("plugin.%s: no test plugin for %q", localName, requirement.Source)
@@ -85,6 +86,16 @@ func (c *fakePluginClient) Generate(_ context.Context, request *protocol.Generat
 		result[i] = protocol.File{Path: file.Path, Data: file.Data, Preserve: file.Preserve}
 	}
 	return &protocol.GenerateResponse{Files: result}, nil
+}
+
+func (c *fakePluginClient) Scaffold(context.Context, *protocol.ScaffoldRequest) (*protocol.ScaffoldResponse, error) {
+	return &protocol.ScaffoldResponse{Files: []protocol.File{
+		{Path: "README.md", Data: []byte("# Test module\n")},
+		{Path: "fetch_url.tool", Data: []byte("tool \"fetch_url\" {\n  param \"url\" {\n    type = string\n  }\n\n  returns {\n    type = string\n  }\n\n  source {\n    kind = \"mcp\"\n    uri  = \"mcp://fetch/fetch\"\n  }\n}\n")},
+		{Path: "kastor.hcl", Data: []byte("kastor {\n  required_plugins {\n    langgraph = {\n      source  = \"github.com/getkastordev/kastor-langgraph\"\n      version = \"~> 0.1\"\n    }\n  }\n}\n\nmodel \"fast\" {\n  provider = \"openai\"\n  id       = \"gpt-4o-mini\"\n}\n\ntarget \"langgraph\" {\n  type   = \"codegen\"\n  plugin = \"langgraph\"\n  output = \"./gen/langgraph\"\n}\n\nmcp_server \"fetch\" {\n  transport = \"stdio\"\n  command   = \"uvx\"\n  args      = [\"mcp-server-fetch\"]\n}\n")},
+		{Path: "researcher.agent", Data: []byte("agent \"researcher\" {\n  model         = model.fast\n  system_prompt = prompt.researcher_system\n  tools         = [tool.fetch_url]\n\n  input \"question\" {\n    type = string\n  }\n\n  output \"answer\" {\n    type = string\n  }\n}\n")},
+		{Path: "researcher_system.prompt", Data: []byte("---\nname = \"researcher_system\"\nrequires = [\"question\"]\n---\nQuestion: {{question}}\n")},
+	}}, nil
 }
 
 func (c *fakePluginClient) Read(context.Context, *protocol.ReadRequest) (*protocol.ReadResponse, error) {

@@ -380,11 +380,24 @@ target "production" {
   an omitted selector is accepted as a deprecated compatibility form and the
   target label is resolved through the legacy in-process adapter. New modules
   and generated scaffolds always use the explicit form.
-- Explicit plugins are executable processes. Core resolves the binary from a
-  local-name override, the configured plugin directory, or `PATH`; performs a
-  protocol/source/version/kind handshake; and delegates validation plus the
-  target operation over the versioned protocol. The final source path segment
-  is the default executable name.
+- `kastor init` resolves version constraints against GitHub releases and writes
+  `.kastor.lock.hcl`: source, exact version, protocol, platform asset mapping,
+  and publisher-provided SHA-256 checksums. The lock is deterministic and must
+  be committed. `--upgrade` refreshes selections, `--frozen` rejects any lock
+  change, and `--offline` forbids network access.
+- Explicit plugins are executable processes. Core resolves an explicit
+  development override first, otherwise the verified lock-selected cache;
+  `PATH` is only a migration fallback for a module with no lock. It performs a
+  protocol/source/version/kind handshake and delegates validation plus the
+  target operation over the versioned protocol. A present lock is authoritative:
+  checksum failure is rejected before execution and never falls through.
+- The final source path segment is the executable name. v0 installation
+  supports `github.com/<owner>/<repository>` sources and their release assets;
+  no public Kastor registry is required.
+- Scaffold content is an optional plugin protocol capability. `kastor new`
+  installs and locks the selected plugin, then requests its deterministic
+  starter files. Core validates paths and owns disk writes but contains no
+  framework-specific starter template.
 - A target's label is only its module-local instance identity. Multiple target
   blocks may select the same plugin with different output paths or config.
 - `type` is a closed enum: `codegen` or `platform`. Unknown values are a compile error; new target types are additive spec changes.
@@ -524,7 +537,8 @@ path only, the generated runtime config may still be overridden locally (§3.3,
  
 | Command | Function |
 |---------|----------|
-| `kastor init` | Scaffold project |
+| `kastor new [--from SOURCE] [dir]` | Create a module from a plugin-owned scaffold |
+| `kastor init [--upgrade] [--frozen] [--offline] [dir]` | Resolve, verify, install, and lock executable plugins |
 | `kastor validate` | Parse + type-check + resolve references + check every tool against every declared target, warning on features a declared target cannot honor yet (§3.3) |
 | `kastor build [-target X]` | Codegen for framework targets |
 | `kastor plan` | Diff spec vs. state file vs. remote platform |

@@ -2,11 +2,16 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	pluginruntime "github.com/weirdGuy/kastor/internal/plugin"
+	"github.com/weirdGuy/kastor/internal/schema"
+	protocol "github.com/weirdGuy/kastor/protocol/v1"
 )
 
 // runCmd executes "kastor <args>" and returns combined output and the
@@ -25,7 +30,7 @@ func runCmd(t *testing.T, args ...string) (string, error) {
 	return out.String(), err
 }
 
-// scaffoldFilenames is every file kastor init creates: project file, one
+// scaffoldFilenames is every file kastor new creates: project file, one
 // agent, one tool, one prompt, and a README. The MCP server the tool binds
 // is an mcp_server block in the project file, not a hand-maintained
 // mcp_servers.json — the build generates that (SPEC.md §3.3).
@@ -37,7 +42,28 @@ var scaffoldFilenames = []string{
 	"README.md",
 }
 
-func TestInitCommandErrors(t *testing.T) {
+func useFakeScaffoldLifecycle(t *testing.T) {
+	t.Helper()
+	client := newFakePluginClient(langgraphPluginSource, protocol.KindCodegen)
+	useFakePlugins(t, client)
+	previous := installPlugins
+	installPlugins = func(_ context.Context, root string, requirements []*schema.PluginRequirement, _ pluginruntime.InstallOptions) (*pluginruntime.InstallResult, error) {
+		entry := &pluginruntime.LockedPlugin{
+			Name: requirements[0].Name, Source: requirements[0].Source, Version: "0.1.0",
+			Constraints: requirements[0].Version, Release: "v0.1.0", Protocol: protocol.Version,
+			Platforms: map[string]string{}, Checksums: map[string]string{},
+		}
+		lock := &pluginruntime.LockFile{Plugins: []*pluginruntime.LockedPlugin{entry}}
+		if err := pluginruntime.WriteLock(root, lock); err != nil {
+			return nil, err
+		}
+		return &pluginruntime.InstallResult{Lock: lock, Installed: []string{entry.Name}}, nil
+	}
+	t.Cleanup(func() { installPlugins = previous })
+}
+
+func TestNewCommandErrors(t *testing.T) {
+	useFakeScaffoldLifecycle(t)
 	tests := []struct {
 		name     string
 		setup    func(t *testing.T, dir string) // plant preexisting state
@@ -58,10 +84,10 @@ func TestInitCommandErrors(t *testing.T) {
 			skipOut:  []string{"Scaffolded"},
 		},
 		{
-			name: "second init over a scaffold is refused",
+			name: "second new over a scaffold is refused",
 			setup: func(t *testing.T, dir string) {
-				if out, err := runCmd(t, "init", dir); err != nil {
-					t.Fatalf("first init failed: %v\noutput:\n%s", err, out)
+				if out, err := runCmd(t, "new", dir); err != nil {
+					t.Fatalf("first new failed: %v\noutput:\n%s", err, out)
 				}
 			},
 			wantCode: 2,
@@ -69,17 +95,10 @@ func TestInitCommandErrors(t *testing.T) {
 			skipOut:  []string{"Scaffolded"},
 		},
 		{
-			name:     "eve target has no scaffold yet",
-			args:     []string{"--target", "eve"},
+			name:     "invalid source is a usage error",
+			args:     []string{"--from", ""},
 			wantCode: 2,
-			wantOut:  []string{`no scaffold for target "eve"`, "langgraph"},
-			skipOut:  []string{"created"},
-		},
-		{
-			name:     "unknown target is a usage error",
-			args:     []string{"--target", "nope"},
-			wantCode: 2,
-			wantOut:  []string{`no scaffold for target "nope"`, "langgraph"},
+			wantOut:  []string{`plugin source "" has no usable`},
 			skipOut:  []string{"created"},
 		},
 	}
@@ -90,7 +109,7 @@ func TestInitCommandErrors(t *testing.T) {
 			if tt.setup != nil {
 				tt.setup(t, dir)
 			}
-			out, err := runCmd(t, append([]string{"init", dir}, tt.args...)...)
+			out, err := runCmd(t, append([]string{"new", dir}, tt.args...)...)
 			if err == nil {
 				t.Fatalf("Execute() succeeded, want error\noutput:\n%s", out)
 			}
@@ -111,17 +130,17 @@ func TestInitCommandErrors(t *testing.T) {
 	}
 }
 
-// TestInitCommandScaffoldWorks is the ticket's acceptance path: init into a
+// TestNewCommandScaffoldWorks is the ticket's acceptance path: new into a
 // new directory, then the scaffolded module must pass kastor validate and
 // kastor build with zero edits, and be in canonical kastor fmt style.
-func TestInitCommandScaffoldWorks(t *testing.T) {
-	useFakeCodegenPlugins(t)
-	dir := filepath.Join(t.TempDir(), "demo") // init must create missing dirs
-	out, err := runCmd(t, "init", dir)
+func TestNewCommandScaffoldWorks(t *testing.T) {
+	useFakeScaffoldLifecycle(t)
+	dir := filepath.Join(t.TempDir(), "demo") // new must create missing dirs
+	out, err := runCmd(t, "new", dir)
 	if err != nil {
-		t.Fatalf("init Execute() error = %v\noutput:\n%s", err, out)
+		t.Fatalf("new Execute() error = %v\noutput:\n%s", err, out)
 	}
-	if !strings.Contains(out, "Scaffolded a new module: 5 files") {
+	if !strings.Contains(out, "Created a new module: 5 files") {
 		t.Errorf("output missing scaffold summary:\n%s", out)
 	}
 	for _, f := range scaffoldFilenames {
@@ -166,12 +185,13 @@ func TestInitCommandScaffoldWorks(t *testing.T) {
 // TestInitCommandIgnoresHiddenEntries: hidden entries belong to the user and
 // must not block a scaffold — a fresh `git init` directory is the canonical
 // case.
-func TestInitCommandIgnoresHiddenEntries(t *testing.T) {
+func TestNewCommandIgnoresHiddenEntries(t *testing.T) {
+	useFakeScaffoldLifecycle(t)
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, ".git", "objects"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	out, err := runCmd(t, "init", dir)
+	out, err := runCmd(t, "new", dir)
 	if err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out)
 	}
@@ -183,7 +203,8 @@ func TestInitCommandIgnoresHiddenEntries(t *testing.T) {
 // TestInitCommandForce: --force scaffolds into a non-empty directory,
 // overwriting only the scaffold's own file names and keeping everything
 // else.
-func TestInitCommandForce(t *testing.T) {
+func TestNewCommandForce(t *testing.T) {
+	useFakeScaffoldLifecycle(t)
 	dir := t.TempDir()
 	keep := filepath.Join(dir, "notes.txt")
 	if err := os.WriteFile(keep, []byte("mine\n"), 0o644); err != nil {
@@ -194,7 +215,7 @@ func TestInitCommandForce(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, err := runCmd(t, "init", dir, "--force")
+	out, err := runCmd(t, "new", dir, "--force")
 	if err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out)
 	}
@@ -207,10 +228,11 @@ func TestInitCommandForce(t *testing.T) {
 	}
 }
 
-func TestInitCommandDefaultsToCwd(t *testing.T) {
+func TestNewCommandDefaultsToCwd(t *testing.T) {
+	useFakeScaffoldLifecycle(t)
 	dir := t.TempDir()
 	t.Chdir(dir)
-	out, err := runCmd(t, "init")
+	out, err := runCmd(t, "new")
 	if err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out)
 	}
@@ -225,11 +247,12 @@ func TestInitCommandDefaultsToCwd(t *testing.T) {
 
 // TestInitCommandDeterministic: same binary, same scaffold — byte for byte
 // (repo convention, and the ticket's "same version → same scaffold").
-func TestInitCommandDeterministic(t *testing.T) {
+func TestNewCommandDeterministic(t *testing.T) {
+	useFakeScaffoldLifecycle(t)
 	a, b := t.TempDir(), t.TempDir()
 	for _, dir := range []string{a, b} {
-		if out, err := runCmd(t, "init", dir); err != nil {
-			t.Fatalf("init %s: %v\noutput:\n%s", dir, err, out)
+		if out, err := runCmd(t, "new", dir); err != nil {
+			t.Fatalf("new %s: %v\noutput:\n%s", dir, err, out)
 		}
 	}
 	for _, f := range scaffoldFilenames {
@@ -244,5 +267,39 @@ func TestInitCommandDeterministic(t *testing.T) {
 		if !bytes.Equal(da, db) {
 			t.Errorf("%s differs between two inits", f)
 		}
+	}
+}
+
+func TestInitCommandWritesEmptyLockForModuleWithoutPlugins(t *testing.T) {
+	dir := t.TempDir()
+	out, err := runCmd(t, "init", dir)
+	if err != nil {
+		t.Fatalf("init: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "No plugins are required") || !strings.Contains(out, pluginruntime.LockFilename) {
+		t.Fatalf("output = %s", out)
+	}
+	lock, err := pluginruntime.ReadLock(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lock.Plugins) != 0 {
+		t.Fatalf("plugins = %#v", lock.Plugins)
+	}
+}
+
+func TestSafeScaffoldPathRejectsTraversalAndReservedLock(t *testing.T) {
+	for _, name := range []string{"", ".", "..", "../outside", `dir\outside`, pluginruntime.LockFilename, "/absolute"} {
+		if _, err := safeScaffoldPath(t.TempDir(), name); err == nil {
+			t.Errorf("safeScaffoldPath(%q) succeeded", name)
+		}
+	}
+	root := t.TempDir()
+	got, err := safeScaffoldPath(root, "nested/file.agent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != filepath.Join(root, "nested", "file.agent") {
+		t.Fatalf("path = %q", got)
 	}
 }

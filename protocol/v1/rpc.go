@@ -17,6 +17,7 @@ const (
 	methodMetadata = "metadata"
 	methodValidate = "validate"
 	methodGenerate = "generate"
+	methodScaffold = "scaffold"
 	methodRead     = "read"
 	methodCreate   = "create"
 	methodUpdate   = "update"
@@ -124,6 +125,16 @@ func dispatch(ctx context.Context, handler Handler, request wireRequest) (any, e
 			return nil, err
 		}
 		return implementation.Generate(ctx, &input)
+	case methodScaffold:
+		implementation, ok := handler.(Scaffolder)
+		if !ok {
+			return nil, unsupported(request.Method)
+		}
+		var input ScaffoldRequest
+		if err := decodePayload(request.Payload, &input); err != nil {
+			return nil, err
+		}
+		return implementation.Scaffold(ctx, &input)
 	case methodRead:
 		implementation, ok := handler.(PlatformProvider)
 		if !ok {
@@ -284,6 +295,14 @@ func (c *Client) Validate(ctx context.Context, request *ValidateRequest) (*Valid
 func (c *Client) Generate(ctx context.Context, request *GenerateRequest) (*GenerateResponse, error) {
 	var response GenerateResponse
 	if err := c.call(ctx, methodGenerate, request, &response); err != nil {
+		return nil, err
+	}
+	return &response, nil
+}
+
+func (c *Client) Scaffold(ctx context.Context, request *ScaffoldRequest) (*ScaffoldResponse, error) {
+	var response ScaffoldResponse
+	if err := c.call(ctx, methodScaffold, request, &response); err != nil {
 		return nil, err
 	}
 	return &response, nil
