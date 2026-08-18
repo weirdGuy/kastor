@@ -26,7 +26,7 @@ var nonEnv = regexp.MustCompile(`[^A-Za-z0-9]+`)
 
 // Open discovers and starts one declared plugin, then verifies that its
 // handshake identity and version satisfy the module requirement.
-func Open(ctx context.Context, localName string, requirement *schema.PluginRequirement) (*protocol.Client, error) {
+func Open(ctx context.Context, localName string, requirement *schema.PluginRequirement) (Client, error) {
 	if requirement == nil {
 		return nil, fmt.Errorf("plugin.%s: requirement is nil", localName)
 	}
@@ -98,7 +98,11 @@ func versionMatches(version, constraint string) bool {
 	if strings.HasPrefix(constraint, "~>") {
 		base := strings.TrimSpace(strings.TrimPrefix(constraint, "~>"))
 		minimum := canonicalVersion(base)
-		if minimum == "" || semver.Compare(actual, minimum) < 0 {
+		rangeVersion := actual
+		if prerelease := semver.Prerelease(rangeVersion); prerelease != "" {
+			rangeVersion = strings.TrimSuffix(rangeVersion, prerelease)
+		}
+		if minimum == "" || semver.Compare(rangeVersion, minimum) < 0 {
 			return false
 		}
 		parts := strings.Split(strings.TrimPrefix(minimum, "v"), ".")
@@ -110,7 +114,7 @@ func versionMatches(version, constraint string) bool {
 		} else {
 			maximum = fmt.Sprintf("v%d.%d.0", major, minor+1)
 		}
-		return semver.Compare(actual, maximum) < 0
+		return semver.Compare(rangeVersion, maximum) < 0
 	}
 	wanted := canonicalVersion(strings.TrimPrefix(constraint, "="))
 	return wanted != "" && semver.Compare(actual, wanted) == 0

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,32 +18,35 @@ func TestExplicitPluginCapabilityValidation(t *testing.T) {
 		{
 			dir: "bad_credential_targets",
 			wantErrs: []string{
-				`mcp_server.hubspot: auth ref "connection://cred_011CZkZDLs7fYzm1hXNPeRjv" needs a vault to resolve against; target.prod plugin config must declare "vault_id"`,
-				`mcp_server.airtable: auth ref "env://AIRTABLE_TOKEN" cannot be bound on target.prod; plugin "github.com/getkastordev/kastor-anthropic" does not support env:// credentials`,
+				`target.prod: vault_id is required for connection credentials (connection://cred_011CZkZDLs7fYzm1hXNPeRjv)`,
+				`mcp_server.airtable: unsupported credential scheme (env://)`,
 			},
 		},
 		{
 			dir: "stdio_on_platform",
 			wantErrs: []string{
-				`mcp_server.fetch: transport "stdio" cannot be bound on target.prod; plugin "github.com/getkastordev/kastor-anthropic" does not advertise local-process support`,
+				`mcp_server.fetch: stdio transport is not supported (Claude Managed Agents requires an HTTP endpoint)`,
 			},
 		},
 		{
 			dir: "stdio_on_eve",
 			wantErrs: []string{
-				`mcp_server.fetch: transport "stdio" cannot be bound on target.typescript; plugin "github.com/getkastordev/kastor-eve" does not advertise local-process support`,
+				`mcp_server.fetch: stdio transport is not supported (Eve connections require an HTTP endpoint)`,
 			},
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.dir, func(t *testing.T) {
+			anthropic := newFakePluginClient(claudePluginSource, "platform")
+			eve := newFakePluginClient(evePluginSource, "codegen")
+			useFakePlugins(t, anthropic, eve)
 			root := filepath.Join("..", "..", "internal", "module", "testdata", tc.dir)
 			mod, err := module.Load(root)
 			if err != nil {
 				t.Fatalf("module.Load: %v", err)
 			}
-			err = validateTargetPlugins(mod)
+			err = validateTargetPlugins(context.Background(), io.Discard, mod)
 			if err == nil {
 				t.Fatalf("validateTargetPlugins: expected %q, got nil", tc.wantErrs)
 			}
@@ -49,6 +54,9 @@ func TestExplicitPluginCapabilityValidation(t *testing.T) {
 				if !strings.Contains(err.Error(), want) {
 					t.Errorf("validateTargetPlugins error = %q\nwant substring %q", err, want)
 				}
+			}
+			if anthropic.validateCalls+eve.validateCalls != 1 {
+				t.Errorf("external validate calls = %d, want 1", anthropic.validateCalls+eve.validateCalls)
 			}
 		})
 	}

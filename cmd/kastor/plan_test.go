@@ -164,9 +164,11 @@ func TestPlanApplyDestroyEndToEnd(t *testing.T) {
 
 // TestPlanWeatherExample is the issue #17 acceptance: a bare kastor plan on
 // examples/weather must produce a clean first plan against the built-in
-// memory platform — this output is the README demo. No fake registration:
-// it exercises the provider registry the shipped binary uses.
+// memory platform — this output is the README demo. Codegen plugins are faked
+// only for compile-time validation; the memory provider is the real built-in
+// registry entry the shipped binary uses.
 func TestPlanWeatherExample(t *testing.T) {
+	useFakeCodegenPlugins(t)
 	dir := copyModule(t, filepath.Join("..", "..", "examples", "weather"))
 	out, err := runCLI(t, "plan", dir)
 	if err != nil {

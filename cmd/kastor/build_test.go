@@ -323,6 +323,7 @@ func TestBuildCommandDefaultsToCwd(t *testing.T) {
 // plan/apply, and the reported file count matches what lands on disk in the
 // declared output directory.
 func TestBuildCommandWeatherExample(t *testing.T) {
+	langgraphClient, eveClient := useFakeCodegenPlugins(t)
 	dir := copyModule(t, filepath.Join("..", "..", "examples", "weather"))
 	out, err := runBuildCmd(t, dir)
 	if err != nil {
@@ -349,6 +350,12 @@ func TestBuildCommandWeatherExample(t *testing.T) {
 	// reported count (hidden entries are the user's and excluded).
 	if onDisk := countVisibleFiles(t, outDir); reported != onDisk {
 		t.Errorf("reported %d files, found %d on disk", reported, onDisk)
+	}
+	for name, client := range map[string]*fakePluginClient{"langgraph": langgraphClient, "eve": eveClient} {
+		if client.validateCalls != 1 || client.generateCalls != 1 || client.closeCalls != 2 {
+			t.Errorf("%s protocol calls: validate=%d generate=%d close=%d; want 1, 1, 2",
+				name, client.validateCalls, client.generateCalls, client.closeCalls)
+		}
 	}
 }
 
@@ -399,6 +406,7 @@ func TestBuildCommandCountIgnoresUserArtifacts(t *testing.T) {
 // reaches the user through a sidecar and a warning instead of overwriting the
 // implementation — once, not on every build after.
 func TestBuildCommandKeepsRuntimeImplementation(t *testing.T) {
+	useFakeCodegenPlugins(t)
 	dir := copyModule(t, filepath.Join("..", "..", "examples", "scheduler"))
 	if out, err := runBuildCmd(t, dir); err != nil {
 		t.Fatalf("Execute() error = %v\noutput:\n%s", err, out)

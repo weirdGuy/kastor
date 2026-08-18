@@ -9,9 +9,20 @@ import (
 	protocol "github.com/weirdGuy/kastor/protocol/v1"
 )
 
+// PlatformClient is the protocol subset needed for reconciliation.
+type PlatformClient interface {
+	Metadata() protocol.Metadata
+	Read(context.Context, *protocol.ReadRequest) (*protocol.ReadResponse, error)
+	Create(context.Context, *protocol.CreateRequest) (*protocol.CreateResponse, error)
+	Update(context.Context, *protocol.UpdateRequest) error
+	Delete(context.Context, *protocol.DeleteRequest) error
+	Diff(context.Context, *protocol.DiffRequest) (*protocol.DiffResponse, error)
+	Check(context.Context, *protocol.CheckRequest) (*protocol.CheckResponse, error)
+}
+
 // Platform adapts protocol-v1 lifecycle RPCs to the core provider contract.
 type Platform struct {
-	Client *protocol.Client
+	Client PlatformClient
 	Target *schema.Target
 }
 
@@ -82,7 +93,7 @@ func (p *Platform) Check(ctx context.Context, desired *provider.Resource, remote
 	return checks, nil
 }
 
-func (p *Platform) client() *protocol.Client {
+func (p *Platform) client() PlatformClient {
 	if p == nil || p.Client == nil {
 		panic("external platform plugin is not started")
 	}

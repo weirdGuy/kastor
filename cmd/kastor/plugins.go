@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 
 	"github.com/weirdGuy/kastor/internal/module"
+	pluginruntime "github.com/weirdGuy/kastor/internal/plugin"
 	"github.com/weirdGuy/kastor/internal/schema"
+	protocol "github.com/weirdGuy/kastor/protocol/v1"
 )
 
 // Official source addresses are the stable identities stored in
@@ -16,8 +20,11 @@ const (
 	langgraphPluginSource = "github.com/getkastordev/kastor-langgraph"
 	evePluginSource       = "github.com/getkastordev/kastor-eve"
 	claudePluginSource    = "github.com/getkastordev/kastor-anthropic"
-	memoryPluginSource    = "github.com/getkastordev/kastor-memory"
 )
+
+// openPlugin is a narrow test seam around executable discovery and startup.
+// Production always uses pluginruntime.Open.
+var openPlugin = pluginruntime.Open
 
 // targetPluginSource resolves a target instance to an implementation
 // identity. Explicit targets always resolve through required_plugins. An empty
@@ -47,14 +54,7 @@ var builtinCapabilities = map[string]targetCapabilities{
 		stdio:          true,
 		envCredentials: true,
 	},
-	langgraphPluginSource: {
-		stdio:          true,
-		envCredentials: true,
-	},
 	"eve": {
-		envCredentials: true,
-	},
-	evePluginSource: {
 		envCredentials: true,
 	},
 	"claude_agents": {
@@ -62,27 +62,56 @@ var builtinCapabilities = map[string]targetCapabilities{
 		requiresVault:         true,
 		stringConfigKeys:      map[string]bool{"api_key_env": true, "vault_id": true},
 	},
-	claudePluginSource: {
-		connectionCredentials: true,
-		requiresVault:         true,
-		stringConfigKeys:      map[string]bool{"api_key_env": true, "vault_id": true},
-	},
 	"memory": {
-		envCredentials: true,
-	},
-	memoryPluginSource: {
 		envCredentials: true,
 	},
 }
 
-// validateTargetPlugins is the temporary in-process implementation adapter.
-// Core parsing and module resolution know only opaque config and plugin
-// identities; target-specific transport and credential rules live here until
-// the protocol-v1 capability RPC replaces this table (KAS-77).
-func validateTargetPlugins(mod *module.Module) error {
+// validateTargetPlugins delegates explicit selectors to the executable that
+// owns them. The static table is retained only for v0.2 targets with no
+// plugin selector, so old modules keep working during the migration window.
+func validateTargetPlugins(ctx context.Context, warnings io.Writer, mod *module.Module) error {
 	referenced := referencedMCPServers(mod)
 	var errs []error
+	clients := map[string]pluginruntime.Client{}
+
 	for _, tgt := range mod.Targets {
+		if tgt.Plugin != "" {
+			client := clients[tgt.Plugin]
+			if client == nil {
+				var err error
+				client, err = openTargetPlugin(ctx, mod, tgt)
+				if err != nil {
+					errs = append(errs, err)
+					continue
+				}
+				clients[tgt.Plugin] = client
+			} else if err := requireTargetKind(tgt, client.Metadata()); err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			response, err := client.Validate(ctx, &protocol.ValidateRequest{
+				Module: pluginruntime.ModuleIR(mod, nil),
+				Target: pluginruntime.TargetIR(tgt),
+			})
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%s: plugin validation failed: %w", tgt.Addr(), err))
+				continue
+			}
+			if response == nil {
+				errs = append(errs, fmt.Errorf("%s: plugin validation returned no response", tgt.Addr()))
+				continue
+			}
+			for _, diagnostic := range response.Diagnostics {
+				if diagnostic.Severity == protocol.SeverityWarning {
+					fmt.Fprintf(warnings, "Warning: %s\n", diagnosticError(diagnostic))
+					continue
+				}
+				errs = append(errs, diagnosticError(diagnostic))
+			}
+			continue
+		}
+
 		source, err := targetPluginSource(mod, tgt)
 		if err != nil {
 			errs = append(errs, err)
@@ -144,7 +173,53 @@ func validateTargetPlugins(mod *module.Module) error {
 			}
 		}
 	}
+	localNames := make([]string, 0, len(clients))
+	for localName := range clients {
+		localNames = append(localNames, localName)
+	}
+	sort.Strings(localNames)
+	for _, localName := range localNames {
+		client := clients[localName]
+		if err := client.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("plugin.%s: close: %w", localName, err))
+		}
+	}
 	return errors.Join(errs...)
+}
+
+func openTargetPlugin(ctx context.Context, mod *module.Module, tgt *schema.Target) (pluginruntime.Client, error) {
+	requirement, ok := mod.PluginRequirement(tgt.Plugin)
+	if !ok {
+		return nil, fmt.Errorf("%s: plugin %q is not declared in kastor.required_plugins", tgt.Addr(), tgt.Plugin)
+	}
+	client, err := openPlugin(ctx, tgt.Plugin, requirement)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", tgt.Addr(), err)
+	}
+	if err := requireTargetKind(tgt, client.Metadata()); err != nil {
+		_ = client.Close()
+		return nil, err
+	}
+	return client, nil
+}
+
+func requireTargetKind(tgt *schema.Target, metadata protocol.Metadata) error {
+	kind := protocol.Kind(tgt.Type)
+	if metadata.Supports(kind) {
+		return nil
+	}
+	return fmt.Errorf("%s: plugin %q does not advertise %s support", tgt.Addr(), metadata.Source, kind)
+}
+
+func diagnosticError(diagnostic protocol.Diagnostic) error {
+	message := diagnostic.Summary
+	if diagnostic.Addr != "" {
+		message = diagnostic.Addr + ": " + message
+	}
+	if diagnostic.Detail != "" {
+		message += " (" + diagnostic.Detail + ")"
+	}
+	return errors.New(message)
 }
 
 func referencedMCPServers(mod *module.Module) map[string]bool {

@@ -29,7 +29,7 @@ func newPlanCmd() *cobra.Command {
 }
 
 func runPlan(ctx context.Context, stdout, stderr io.Writer, dir, targetName string) error {
-	jobs, release, err := preparePlatform(stderr, dir, targetName)
+	jobs, release, err := preparePlatform(ctx, stderr, dir, targetName)
 	if err != nil {
 		return err
 	}

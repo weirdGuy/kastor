@@ -8,10 +8,6 @@ kastor {
       source  = "github.com/getkastordev/kastor-eve"
       version = "~> 0.1"
     }
-    memory = {
-      source  = "github.com/getkastordev/kastor-memory"
-      version = "~> 0.1"
-    }
   }
 }
 
@@ -44,8 +40,7 @@ target "eve" {
 # `target "claude_agents"` once the Claude Managed Agents provider ships
 # (SPEC.md section 8).
 target "memory" {
-  type   = "platform"
-  plugin = "memory"
+  type = "platform"
 }
 
 # The MCP server tool.web_search binds to. Declaring it is what makes

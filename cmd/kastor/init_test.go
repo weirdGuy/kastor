@@ -115,6 +115,7 @@ func TestInitCommandErrors(t *testing.T) {
 // new directory, then the scaffolded module must pass kastor validate and
 // kastor build with zero edits, and be in canonical kastor fmt style.
 func TestInitCommandScaffoldWorks(t *testing.T) {
+	useFakeCodegenPlugins(t)
 	dir := filepath.Join(t.TempDir(), "demo") // init must create missing dirs
 	out, err := runCmd(t, "init", dir)
 	if err != nil {

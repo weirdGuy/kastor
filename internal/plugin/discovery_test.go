@@ -13,6 +13,7 @@ func TestVersionMatches(t *testing.T) {
 		want       bool
 	}{
 		{"0.1.0", "~> 0.1", true},
+		{"0.1.0-dev", "~> 0.1", true},
 		{"0.9.0", "~> 0.1", true},
 		{"1.0.0", "~> 0.1", false},
 		{"0.1.9", "~> 0.1.2", true},

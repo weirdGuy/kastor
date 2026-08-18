@@ -380,6 +380,11 @@ target "production" {
   an omitted selector is accepted as a deprecated compatibility form and the
   target label is resolved through the legacy in-process adapter. New modules
   and generated scaffolds always use the explicit form.
+- Explicit plugins are executable processes. Core resolves the binary from a
+  local-name override, the configured plugin directory, or `PATH`; performs a
+  protocol/source/version/kind handshake; and delegates validation plus the
+  target operation over the versioned protocol. The final source path segment
+  is the default executable name.
 - A target's label is only its module-local instance identity. Multiple target
   blocks may select the same plugin with different output paths or config.
 - `type` is a closed enum: `codegen` or `platform`. Unknown values are a compile error; new target types are additive spec changes.
@@ -388,7 +393,7 @@ target "production" {
   plugin. Core preserves it as a JSON-compatible value tree and has no
   provider-specific fields. Unknown or meaningless config entries are plugin
   errors rather than silently ignored values.
-- The memory plugin is an **ephemeral in-memory store** for examples,
+- The built-in memory target is an **ephemeral in-memory store** for examples,
   onboarding, and CI. It accepts no config. Its remote objects die with the
   process, so a later invocation truthfully reports remote-missing drift.
 - The Anthropic plugin accepts `api_key_env` and `vault_id` in `config`.

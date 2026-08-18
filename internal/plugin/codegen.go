@@ -8,9 +8,15 @@ import (
 	protocol "github.com/weirdGuy/kastor/protocol/v1"
 )
 
+// CodegenClient is the protocol subset needed for generation.
+type CodegenClient interface {
+	Generate(context.Context, *protocol.GenerateRequest) (*protocol.GenerateResponse, error)
+}
+
 // Codegen adapts a protocol client to the core build.Generator contract.
 type Codegen struct {
-	Client *protocol.Client
+	Client  CodegenClient
+	Context context.Context
 }
 
 var _ build.Generator = (*Codegen)(nil)
@@ -19,7 +25,11 @@ func (g *Codegen) Generate(job *build.Job) ([]build.File, error) {
 	if g == nil || g.Client == nil {
 		return nil, fmt.Errorf("external codegen plugin is not started")
 	}
-	response, err := g.Client.Generate(context.Background(), &protocol.GenerateRequest{
+	ctx := g.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	response, err := g.Client.Generate(ctx, &protocol.GenerateRequest{
 		Module: ModuleIR(job.Module, job.Graph),
 		Target: TargetIR(job.Target),
 	})

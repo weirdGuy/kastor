@@ -31,6 +31,16 @@ type Metadata struct {
 	Capabilities Capabilities `json:"capabilities"`
 }
 
+// Supports reports whether the plugin advertises an operation family.
+func (m Metadata) Supports(kind Kind) bool {
+	for _, advertised := range m.Kinds {
+		if advertised == kind {
+			return true
+		}
+	}
+	return false
+}
+
 // Capabilities describes target validation and optional RPC support.
 type Capabilities struct {
 	LocalProcesses    bool                       `json:"local_processes,omitempty"`

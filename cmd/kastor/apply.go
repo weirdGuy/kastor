@@ -53,7 +53,7 @@ func newDestroyCmd() *cobra.Command {
 // operation; state write failures are IO errors (exit 2), and the engine's
 // error already tells the user what was applied before the failure.
 func runApply(ctx context.Context, stdout, stderr io.Writer, dir, targetName string, destroy bool) error {
-	jobs, release, err := preparePlatform(stderr, dir, targetName)
+	jobs, release, err := preparePlatform(ctx, stderr, dir, targetName)
 	if err != nil {
 		return err
 	}

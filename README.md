@@ -580,6 +580,32 @@ go install github.com/weirdGuy/kastor/cmd/kastor@latest
 
 Or download an archive for your platform from the [releases page](https://github.com/weirdGuy/kastor/releases), verify it against `checksums.txt`, and put the `kastor` binary on your PATH.
 
+### Install target plugins
+
+An explicit target starts a separate executable whose name is the last segment
+of its source address. For the official plugins those binaries are
+`kastor-langgraph`, `kastor-eve`, and `kastor-anthropic`.
+
+Until tagged plugin releases and automatic plugin installation are available,
+build the needed repository and put the binary on your `PATH`:
+
+```sh
+git clone https://github.com/getkastordev/kastor-langgraph
+cd kastor-langgraph
+go build -o ~/.local/bin/kastor-langgraph ./cmd/kastor-langgraph
+```
+
+Discovery order is:
+
+1. `KASTOR_PLUGIN_<LOCAL_NAME>` — an exact executable path, such as
+   `KASTOR_PLUGIN_LANGGRAPH=/work/kastor-langgraph`.
+2. `KASTOR_PLUGIN_DIR` — a directory containing source-named executables.
+3. `PATH`.
+
+The core performs a protocol, source-identity, target-kind, and version
+handshake before sending the canonical module IR. Plugin stdout is reserved
+for protocol traffic; diagnostics and logs belong on stderr.
+
 ## Development
 
 ```sh
