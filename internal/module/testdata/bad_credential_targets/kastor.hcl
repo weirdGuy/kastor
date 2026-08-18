@@ -1,7 +1,7 @@
 kastor {
   required_plugins {
     anthropic = {
-      source  = "github.com/getkastor/kastor-anthropic"
+      source  = "github.com/getkastordev/kastor-anthropic"
       version = "~> 0.1"
     }
   }

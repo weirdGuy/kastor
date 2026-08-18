@@ -17,19 +17,19 @@ func TestExplicitPluginCapabilityValidation(t *testing.T) {
 			dir: "bad_credential_targets",
 			wantErrs: []string{
 				`mcp_server.hubspot: auth ref "connection://cred_011CZkZDLs7fYzm1hXNPeRjv" needs a vault to resolve against; target.prod plugin config must declare "vault_id"`,
-				`mcp_server.airtable: auth ref "env://AIRTABLE_TOKEN" cannot be bound on target.prod; plugin "github.com/getkastor/kastor-anthropic" does not support env:// credentials`,
+				`mcp_server.airtable: auth ref "env://AIRTABLE_TOKEN" cannot be bound on target.prod; plugin "github.com/getkastordev/kastor-anthropic" does not support env:// credentials`,
 			},
 		},
 		{
 			dir: "stdio_on_platform",
 			wantErrs: []string{
-				`mcp_server.fetch: transport "stdio" cannot be bound on target.prod; plugin "github.com/getkastor/kastor-anthropic" does not advertise local-process support`,
+				`mcp_server.fetch: transport "stdio" cannot be bound on target.prod; plugin "github.com/getkastordev/kastor-anthropic" does not advertise local-process support`,
 			},
 		},
 		{
 			dir: "stdio_on_eve",
 			wantErrs: []string{
-				`mcp_server.fetch: transport "stdio" cannot be bound on target.typescript; plugin "github.com/getkastor/kastor-eve" does not advertise local-process support`,
+				`mcp_server.fetch: transport "stdio" cannot be bound on target.typescript; plugin "github.com/getkastordev/kastor-eve" does not advertise local-process support`,
 			},
 		},
 	}

@@ -341,11 +341,11 @@ source and version separately from target instances:
 kastor {
   required_plugins {
     langgraph = {
-      source  = "github.com/getkastor/kastor-langgraph"
+      source  = "github.com/getkastordev/kastor-langgraph"
       version = "~> 0.1"
     }
     anthropic = {
-      source  = "github.com/getkastor/kastor-anthropic"
+      source  = "github.com/getkastordev/kastor-anthropic"
       version = "~> 0.1"
     }
   }

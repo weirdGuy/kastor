@@ -1,11 +1,11 @@
 kastor {
   required_plugins {
     langgraph = {
-      source  = "github.com/getkastor/kastor-langgraph"
+      source  = "github.com/getkastordev/kastor-langgraph"
       version = "~> 0.1"
     }
     eve = {
-      source  = "github.com/getkastor/kastor-eve"
+      source  = "github.com/getkastordev/kastor-eve"
       version = "~> 0.1"
     }
   }

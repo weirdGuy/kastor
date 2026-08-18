@@ -13,10 +13,10 @@ import (
 // required_plugins and, later, the lock file. The short names remain only as
 // v0.2 compatibility aliases while modules migrate to explicit selectors.
 const (
-	langgraphPluginSource = "github.com/getkastor/kastor-langgraph"
-	evePluginSource       = "github.com/getkastor/kastor-eve"
-	claudePluginSource    = "github.com/getkastor/kastor-anthropic"
-	memoryPluginSource    = "github.com/getkastor/kastor-memory"
+	langgraphPluginSource = "github.com/getkastordev/kastor-langgraph"
+	evePluginSource       = "github.com/getkastordev/kastor-eve"
+	claudePluginSource    = "github.com/getkastordev/kastor-anthropic"
+	memoryPluginSource    = "github.com/getkastordev/kastor-memory"
 )
 
 // targetPluginSource resolves a target instance to an implementation

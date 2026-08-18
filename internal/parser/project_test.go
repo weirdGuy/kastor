@@ -23,7 +23,7 @@ func TestParseProjectFile(t *testing.T) {
 			file: "valid_full.hcl",
 			want: &schema.ProjectFile{
 				Plugins: []*schema.PluginRequirement{
-					{Name: "langgraph", Source: "github.com/getkastor/kastor-langgraph", Version: "~> 0.1"},
+					{Name: "langgraph", Source: "github.com/getkastordev/kastor-langgraph", Version: "~> 0.1"},
 					{Name: "assistants", Source: "example.com/acme/assistants", Version: "1.2.0"},
 				},
 				Models: []*schema.Model{
@@ -239,7 +239,7 @@ func TestParseProjectTargetsMayShareAPlugin(t *testing.T) {
 kastor {
   required_plugins {
     langgraph = {
-      source  = "github.com/getkastor/kastor-langgraph"
+      source  = "github.com/getkastordev/kastor-langgraph"
       version = "~> 0.1"
     }
   }
