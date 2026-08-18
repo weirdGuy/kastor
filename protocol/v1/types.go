@@ -33,8 +33,8 @@ type Metadata struct {
 
 // Capabilities describes target validation and optional RPC support.
 type Capabilities struct {
-	LocalProcesses   bool                       `json:"local_processes,omitempty"`
-	CredentialSchemes []string                 `json:"credential_schemes,omitempty"`
+	LocalProcesses    bool                       `json:"local_processes,omitempty"`
+	CredentialSchemes []string                   `json:"credential_schemes,omitempty"`
 	Config            map[string]ConfigAttribute `json:"config,omitempty"`
 	Check             bool                       `json:"check,omitempty"`
 }
@@ -67,13 +67,13 @@ type Diagnostic struct {
 // deterministic and TopologicalOrder is dependencies-first with lexical tie
 // breaking. Dependencies contains sorted direct dependency addresses.
 type Module struct {
-	Agents           []*Agent           `json:"agents,omitempty"`
-	Tools            []*Tool            `json:"tools,omitempty"`
-	Prompts          []*Prompt          `json:"prompts,omitempty"`
-	Models           []*Model           `json:"models,omitempty"`
-	Targets          []*Target          `json:"targets,omitempty"`
-	MCPServers       []*MCPServer       `json:"mcp_servers,omitempty"`
-	TopologicalOrder []string           `json:"topological_order,omitempty"`
+	Agents           []*Agent            `json:"agents,omitempty"`
+	Tools            []*Tool             `json:"tools,omitempty"`
+	Prompts          []*Prompt           `json:"prompts,omitempty"`
+	Models           []*Model            `json:"models,omitempty"`
+	Targets          []*Target           `json:"targets,omitempty"`
+	MCPServers       []*MCPServer        `json:"mcp_servers,omitempty"`
+	TopologicalOrder []string            `json:"topological_order,omitempty"`
 	Dependencies     map[string][]string `json:"dependencies,omitempty"`
 }
 
