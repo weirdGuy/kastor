@@ -3,10 +3,10 @@
 package plugin
 
 import (
-	"github.com/weirdGuy/kastor/internal/graph"
-	"github.com/weirdGuy/kastor/internal/module"
-	"github.com/weirdGuy/kastor/internal/schema"
-	protocol "github.com/weirdGuy/kastor/protocol/v1"
+	"github.com/getkastordev/kastor/internal/graph"
+	"github.com/getkastordev/kastor/internal/module"
+	"github.com/getkastordev/kastor/internal/schema"
+	protocol "github.com/getkastordev/kastor/protocol/v1"
 )
 
 // ModuleIR makes an ownership-separated protocol value. No internal core

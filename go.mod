@@ -1,4 +1,4 @@
-module github.com/weirdGuy/kastor
+module github.com/getkastordev/kastor
 
 go 1.26.4
 
@@ -8,6 +8,7 @@ require (
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/spf13/cobra v1.10.2
 	github.com/zclconf/go-cty v1.16.3
+	golang.org/x/mod v0.25.0
 )
 
 require (
@@ -26,7 +27,6 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.2 // indirect
-	golang.org/x/mod v0.25.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/text v0.27.0 // indirect
 	golang.org/x/tools v0.34.0 // indirect

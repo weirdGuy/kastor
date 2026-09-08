@@ -10,11 +10,11 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/weirdGuy/kastor/internal/build"
-	"github.com/weirdGuy/kastor/internal/build/buildtest"
-	"github.com/weirdGuy/kastor/internal/build/eve"
-	"github.com/weirdGuy/kastor/internal/graph"
-	"github.com/weirdGuy/kastor/internal/module"
+	"github.com/getkastordev/kastor/internal/build"
+	"github.com/getkastordev/kastor/internal/build/buildtest"
+	"github.com/getkastordev/kastor/internal/build/eve"
+	"github.com/getkastordev/kastor/internal/graph"
+	"github.com/getkastordev/kastor/internal/module"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden files under testdata")

@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/weirdGuy/kastor/internal/diff"
+	"github.com/getkastordev/kastor/internal/diff"
 )
 
 func TestUnified(t *testing.T) {

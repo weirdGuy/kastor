@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/weirdGuy/kastor/internal/provider"
-	"github.com/weirdGuy/kastor/internal/schema"
-	protocol "github.com/weirdGuy/kastor/protocol/v1"
+	"github.com/getkastordev/kastor/internal/provider"
+	"github.com/getkastordev/kastor/internal/schema"
+	protocol "github.com/getkastordev/kastor/protocol/v1"
 )
 
 // PlatformClient is the protocol subset needed for reconciliation.

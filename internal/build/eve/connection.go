@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 // mcpServer collects the tools one agent binds on one MCP server: eve

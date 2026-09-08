@@ -8,10 +8,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/weirdGuy/kastor/internal/graph"
-	"github.com/weirdGuy/kastor/internal/module"
-	"github.com/weirdGuy/kastor/internal/schema"
-	"github.com/weirdGuy/kastor/internal/state"
+	"github.com/getkastordev/kastor/internal/graph"
+	"github.com/getkastordev/kastor/internal/module"
+	"github.com/getkastordev/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/state"
 )
 
 // Action is what apply will do to one resource.

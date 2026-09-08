@@ -12,8 +12,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/weirdGuy/kastor/internal/provider"
-	"github.com/weirdGuy/kastor/internal/provider/memory"
+	"github.com/getkastordev/kastor/internal/provider"
+	"github.com/getkastordev/kastor/internal/provider/memory"
 )
 
 // Fake is an in-memory provider.Provider. Zero-configuration tests just

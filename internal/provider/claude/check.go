@@ -11,8 +11,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/weirdGuy/kastor/internal/provider"
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/provider"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 // Check kinds this provider contributes to a kastor doctor report.

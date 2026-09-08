@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/weirdGuy/kastor/internal/build"
+	"github.com/getkastordev/kastor/internal/build"
 )
 
 // runs is how many times AssertDeterministic re-generates. One re-run proves

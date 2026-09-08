@@ -11,14 +11,14 @@
   },
   "categories": ["Programming Languages"],
   "keywords": ["kastor", "hcl", "ai agents", "agents", "terraform"],
-  "homepage": "https://github.com/weirdGuy/kastor/tree/main/extensions/vscode",
+  "homepage": "https://github.com/getkastordev/kastor/tree/main/extensions/vscode",
   "repository": {
     "type": "git",
-    "url": "https://github.com/weirdGuy/kastor.git",
+    "url": "https://github.com/getkastordev/kastor.git",
     "directory": "extensions/vscode"
   },
   "bugs": {
-    "url": "https://github.com/weirdGuy/kastor/issues"
+    "url": "https://github.com/getkastordev/kastor/issues"
   },
   "contributes": {
     "languages": [

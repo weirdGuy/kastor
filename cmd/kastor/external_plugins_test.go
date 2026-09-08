@@ -6,13 +6,13 @@ import (
 	"sort"
 	"testing"
 
-	corebuild "github.com/weirdGuy/kastor/internal/build"
-	"github.com/weirdGuy/kastor/internal/build/eve"
-	"github.com/weirdGuy/kastor/internal/build/langgraph"
-	"github.com/weirdGuy/kastor/internal/module"
-	pluginruntime "github.com/weirdGuy/kastor/internal/plugin"
-	"github.com/weirdGuy/kastor/internal/schema"
-	protocol "github.com/weirdGuy/kastor/protocol/v1"
+	corebuild "github.com/getkastordev/kastor/internal/build"
+	"github.com/getkastordev/kastor/internal/build/eve"
+	"github.com/getkastordev/kastor/internal/build/langgraph"
+	"github.com/getkastordev/kastor/internal/module"
+	pluginruntime "github.com/getkastordev/kastor/internal/plugin"
+	"github.com/getkastordev/kastor/internal/schema"
+	protocol "github.com/getkastordev/kastor/protocol/v1"
 )
 
 type fakePluginClient struct {

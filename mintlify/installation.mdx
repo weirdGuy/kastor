@@ -7,8 +7,15 @@ Kastor ships as a single static binary for macOS (Apple Silicon and Intel), Linu
 
 ## Homebrew (macOS)
 
+<Note>
+  The canonical repository is now `getkastordev/kastor`. The new Go install
+  path still requires a release declaring `github.com/getkastordev/kastor`;
+  the GitHub transfer alone does not make that installation available.
+  The Homebrew tap has also moved to `getkastordev/tap`.
+</Note>
+
 ```bash
-brew install weirdGuy/tap/kastor
+brew install getkastordev/tap/kastor
 ```
 
 Upgrades arrive through the same tap: `brew upgrade kastor`.
@@ -16,22 +23,22 @@ Upgrades arrive through the same tap: `brew upgrade kastor`.
 ## Install script (macOS and Linux)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/weirdGuy/kastor/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/getkastordev/kastor/main/scripts/install.sh | sh
 ```
 
 The script downloads the latest release for your OS and architecture, verifies it against the release `checksums.txt`, and installs to `/usr/local/bin` when writable, otherwise `~/.local/bin`. It never invokes `sudo`. Set `KASTOR_INSTALL_DIR` to override the destination.
 
 ## go install
 
-With Go 1.26+:
+With Go 1.26.4+, after the first new-path core release:
 
 ```bash
-go install github.com/weirdGuy/kastor/cmd/kastor@latest
+go install github.com/getkastordev/kastor/cmd/kastor@latest
 ```
 
 ## Binary download
 
-Every release on the [releases page](https://github.com/weirdGuy/kastor/releases) includes archives named `kastor_<version>_<os>_<arch>`:
+Every release on the [releases page](https://github.com/getkastordev/kastor/releases) includes archives named `kastor_<version>_<os>_<arch>`:
 
 | Platform | Archive |
 | --- | --- |
@@ -46,7 +53,7 @@ Verify the archive against `checksums.txt`, extract it, and put the `kastor` bin
 ## Build from source
 
 ```bash
-git clone https://github.com/weirdGuy/kastor.git
+git clone https://github.com/getkastordev/kastor.git
 cd kastor
 go build -o kastor ./cmd/kastor
 ```

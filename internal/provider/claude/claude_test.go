@@ -15,8 +15,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go/option"
 
-	"github.com/weirdGuy/kastor/internal/provider"
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/provider"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 const testAPIKey = "test-anthropic-key"

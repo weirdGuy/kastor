@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/weirdGuy/kastor/internal/module"
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/module"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 // DesiredConfig renders one agent's closure — the agent block plus the

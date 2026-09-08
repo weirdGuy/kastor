@@ -10,6 +10,11 @@ Kastor is "Terraform for AI agents": a declarative HCL spec compiled to agent fr
 
 ## Architecture
 
+Core module: `github.com/getkastordev/kastor`. External plugins import the public
+`protocol/v1` package, never core `internal/` packages. Explicit targets run out
+of process; in-process LangGraph/eve/Claude packages below are legacy adapters
+for the v0.2 migration window, not extension points. See SPEC.md §6.
+
 ```
 cmd/kastor/         CLI entrypoint (cobra)
 internal/
@@ -17,7 +22,7 @@ internal/
   schema/           typed config structs, validation
   module/           directory walk → symbol table, cross-file reference resolution
   graph/            DAG construction, cycle detection, topo sort
-  build/            codegen engine + per-target generators (build/langgraph/, build/eve/, build/crewai/)
+  build/            codegen engine + legacy generators (build/langgraph/, build/eve/)
   provider/         platform reconcilers (provider/memory/, provider/claude/)
   state/            state file read/write, locking, diff
 ```
@@ -34,8 +39,8 @@ gofmt -l .                     # formatting check (must be clean)
 
 ## Conventions
 
-- Go 1.22+, standard library first; approved deps: cobra, hashicorp/hcl/v2, go-cmp (tests), anthropic-sdk-go (Claude Managed Agents provider)
-- All packages under `internal/` except `cmd/`; no public API surface in v0
+- Go 1.26.4+, standard library first; approved deps: cobra, hashicorp/hcl/v2, go-cmp (tests), anthropic-sdk-go (legacy Claude Managed Agents provider)
+- Implementation packages live under `internal/`; `protocol/v1` is the public plugin contract, and `cmd/` contains the CLI
 - Errors: wrap with `fmt.Errorf("context: %w", err)`; every user-facing diagnostic states what was found, what was expected, and where — file:line plus block address (e.g. `agent.weather: unknown reference model.fastt`)
 - Table-driven tests; fixtures live in `testdata/` per package (valid + invalid HCL samples)
 - Every parser/validation feature needs at least one negative test (bad input → expected diagnostic)
@@ -62,4 +67,4 @@ gofmt -l .                     # formatting check (must be clean)
 
 Cutting one: follow [RELEASING.md](RELEASING.md) — pre-tag checklist, the manual Claude acceptance run and why it is not in CI, tag commands, post-release verification. The mechanism:
 
-Tag-driven: pushing a `v*` tag runs `.github/workflows/release.yml`, which runs the full test suite and then GoReleaser (`.goreleaser.yaml`) — five platform/arch binaries (darwin arm64/amd64, linux arm64/amd64, windows amd64), archives, `checksums.txt`, grouped changelog, GitHub release, and (only if the `TAP_GITHUB_TOKEN` secret exists) a Homebrew cask push to `weirdGuy/homebrew-tap`. CI dry-runs the config on every PR via `goreleaser release --snapshot --clean`, so validate release changes there — never by pushing a tag. Caveat: neither `check` nor the snapshot evaluates publish-stage templates (e.g. the cask `token`/`skip_upload`), so keep those to Go template builtins — a bad function name only surfaces during a real release. Version and commit are injected into `main.version` / `main.commit` via ldflags; `scripts/install.sh` depends on the archive naming template, keep them in sync. Keep `CHANGELOG.md` (keep-a-changelog) updated per release.
+Tag-driven: pushing a `v*` tag runs `.github/workflows/release.yml`, which runs the full test suite and then GoReleaser (`.goreleaser.yaml`) — five platform/arch binaries (darwin arm64/amd64, linux arm64/amd64, windows amd64), archives, `checksums.txt`, grouped changelog, GitHub release, and (only if the `TAP_GITHUB_TOKEN` secret exists) a Homebrew cask push to `getkastordev/homebrew-tap`. CI dry-runs the config on every PR via `goreleaser release --snapshot --clean`, so validate release changes there — never by pushing a tag. Caveat: neither `check` nor the snapshot evaluates publish-stage templates (e.g. the cask `token`/`skip_upload`), so keep those to Go template builtins — a bad function name only surfaces during a real release. Version and commit are injected into `main.version` / `main.commit` via ldflags; `scripts/install.sh` depends on the archive naming template, keep them in sync. Keep `CHANGELOG.md` (keep-a-changelog) updated per release.

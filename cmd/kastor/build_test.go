@@ -13,12 +13,12 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/weirdGuy/kastor/internal/build"
-	"github.com/weirdGuy/kastor/internal/module"
-	"github.com/weirdGuy/kastor/internal/provider"
-	"github.com/weirdGuy/kastor/internal/provider/claude"
-	"github.com/weirdGuy/kastor/internal/schema"
-	"github.com/weirdGuy/kastor/internal/state"
+	"github.com/getkastordev/kastor/internal/build"
+	"github.com/getkastordev/kastor/internal/module"
+	"github.com/getkastordev/kastor/internal/provider"
+	"github.com/getkastordev/kastor/internal/provider/claude"
+	"github.com/getkastordev/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/state"
 )
 
 // runBuildCmd executes "kastor build <args>" and returns combined output and

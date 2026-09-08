@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/weirdGuy/kastor/internal/build"
-	protocol "github.com/weirdGuy/kastor/protocol/v1"
+	"github.com/getkastordev/kastor/internal/build"
+	protocol "github.com/getkastordev/kastor/protocol/v1"
 )
 
 // CodegenClient is the protocol subset needed for generation.

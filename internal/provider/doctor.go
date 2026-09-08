@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 // Check kinds emitted by the engine itself. Providers contribute their own

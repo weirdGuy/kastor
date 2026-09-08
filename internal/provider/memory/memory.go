@@ -17,8 +17,8 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/weirdGuy/kastor/internal/provider"
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/provider"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 // Provider implements provider.Provider over a map in process memory. Its

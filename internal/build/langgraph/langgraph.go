@@ -29,8 +29,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/weirdGuy/kastor/internal/build"
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/build"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 // Generator implements build.Generator for the LangGraph target.

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/weirdGuy/kastor/internal/module"
+	"github.com/getkastordev/kastor/internal/module"
 )
 
 func TestExplicitPluginCapabilityValidation(t *testing.T) {

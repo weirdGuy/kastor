@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/weirdGuy/kastor/internal/module"
+	"github.com/getkastordev/kastor/internal/module"
 )
 
 // Graph is the dependency graph over every block address in a module.

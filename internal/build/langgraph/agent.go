@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 // genAgent emits agents/<name>.py: the agent's declared outputs as a

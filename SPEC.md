@@ -667,25 +667,41 @@ true when it ran, which is a promise it can keep.
 ---
  
 ## 6. Architecture (Go)
- 
+
+The canonical core Go module is `github.com/getkastordev/kastor`; the public
+plugin contract is `github.com/getkastordev/kastor/protocol/v1`. The repository
+transfer and first new-path publication are separate gates (see
+[RELEASING.md](RELEASING.md)). A Go import-path change does not change protocol
+version 1, plugin source identity, or module lock/state identity.
+
+Core owns language, graph, lifecycle, state, plugin installation, and
+deterministic writes. External plugins own capabilities, target configuration,
+framework mappings, hosted API clients, and scaffolds. The in-process target
+packages below remain **legacy compatibility adapters** during the v0.2
+migration window in §3.5, not the extension point for new target work.
+
 ```
 cmd/kastor/         CLI (cobra)
+protocol/v1/       public neutral IR and executable JSON RPC contract
 internal/
   parser/           HCL decode (hashicorp/hcl/v2) → AST
   schema/           typed config structs, validation
   module/           directory walk → symbol table, cross-file reference resolution
   graph/            DAG construction, cycle detection, topo sort
   build/            codegen engine
-    langgraph/      target: LangGraph (Python)
-    eve/            target: Vercel eve (TypeScript)
-    crewai/         target: CrewAI (Python)
+    langgraph/      legacy LangGraph adapter (Python)
+    eve/            legacy eve adapter (TypeScript)
   provider/         platform reconcilers
     memory/         built-in in-memory platform (demos, examples, CI)
-    claude/         provider: Claude Managed Agents
+    claude/         legacy Claude Managed Agents adapter
+  plugin/           installation, verification, discovery, RPC adapters
   state/            state file read/write, locking, diff
 ```
  
-Providers implement a common interface (`Read/Create/Update/Delete/Diff`) — later extractable to a plugin system (go-plugin, like Terraform).
+Providers implement a common interface (`Read/Create/Update/Delete/Diff`).
+Explicit targets already use executable plugins over protocol-v1 JSON messages
+on stdin/stdout; they do not use an in-process Go registry or gRPC. The public
+protocol contains neutral types, never imports from core `internal/` packages.
 
 **Provider contract** (`internal/provider`): the engine renders each agent's closure into a neutral, serializable config (a JSON value tree — no core Go types, no provider types), so the interface can move behind a plugin boundary without redesign. Contract rules:
 
