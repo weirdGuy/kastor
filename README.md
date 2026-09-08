@@ -1,5 +1,5 @@
 > [!TIP]
-> Working on a new release, it's coming out 18th of September.
+> BIG Release is coming September 18th
 
 # Kastor
 
