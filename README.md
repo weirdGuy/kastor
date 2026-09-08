@@ -569,12 +569,12 @@ Kastor defines the agent contract and generates a LangGraph project from that sp
 The canonical repository is now `getkastordev/kastor`. The new `go install`
 path still requires a release declaring the new module path; the GitHub
 transfer alone does not make that installation available. See [RELEASING.md](RELEASING.md)
-for release order. The separate Homebrew tap remains `weirdGuy/tap`.
+for release order. The Homebrew tap has also moved to `getkastordev/tap`.
 
 Homebrew (macOS):
 
 ```sh
-brew install weirdGuy/tap/kastor
+brew install getkastordev/tap/kastor
 ```
 
 Install script:

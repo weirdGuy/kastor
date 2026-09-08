@@ -6,7 +6,7 @@ full test suite and then GoReleaser
 ([`.goreleaser.yaml`](.goreleaser.yaml)): five platform/arch binaries (darwin
 arm64/amd64, linux arm64/amd64, windows amd64), archives, `checksums.txt`, a
 grouped changelog, the GitHub release, and — when the `TAP_GITHUB_TOKEN` secret
-is present — a Homebrew cask push to `weirdGuy/homebrew-tap`.
+is present — a Homebrew cask push to `getkastordev/homebrew-tap`.
 
 Nothing below is automated. Work through it before you tag.
 
@@ -18,6 +18,12 @@ requirements and checksums together before publishing fresh plugin versions.
 Keep plugin source identities unchanged and do not commit local replacements.
 The GitHub redirect does not change old tags' module declarations. Do not reuse
 the historical `v0.2.0` tag below.
+
+The Homebrew tap has also transferred to `getkastordev/homebrew-tap`. Before
+publishing, verify that `TAP_GITHUB_TOKEN` has contents-write access to that
+repository under the organization's token policies. Core's default
+`GITHUB_TOKEN` cannot publish to a separate repository. Snapshot success does
+not verify these permissions or a live Homebrew installation.
 
 ## Pre-tag checklist
 
@@ -158,7 +164,7 @@ both demonstrated.
    `gh run list --workflow=release.yml --limit 1`
 2. The GitHub release has five archives plus `checksums.txt`.
 3. If `TAP_GITHUB_TOKEN` is configured, the Homebrew cask moved:
-   `gh api repos/weirdGuy/homebrew-tap/contents/Casks/kastor.rb -q .content | base64 -d | head -3`
+   `gh api repos/getkastordev/homebrew-tap/contents/Casks/kastor.rb -q .content | base64 -d | head -3`
    The tap commit message is `Brew cask update for kastor version v<x.y.z>`.
    If the token is absent, cask publication is skipped, not verified. Do not
    advertise the new version as available through Homebrew until checked.

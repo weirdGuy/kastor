@@ -69,8 +69,7 @@ release:
     > Kastor is pre-1.0. The v0 language semantics may still change until the
     > v0 exit criteria ([KAS-36](https://linear.app/getkastor/issue/KAS-36)) are met.
 
-# Homebrew cask in weirdGuy/homebrew-tap (`brew install weirdGuy/tap/kastor`).
-# This separate repository is not part of the core ownership transfer.
+# Homebrew cask in getkastordev/homebrew-tap (`brew install getkastordev/tap/kastor`).
 # Casks are the current GoReleaser mechanism for taps (`brews` is deprecated)
 # and are macOS-only; Linux users have scripts/install.sh or `go install`.
 homebrew_casks:
@@ -78,7 +77,7 @@ homebrew_casks:
     binaries:
       - kastor
     repository:
-      owner: weirdGuy
+      owner: getkastordev
       name: homebrew-tap
       # Must be EXACTLY this shape: goreleaser rejects any other interpolation
       # in token fields ("expected {{ .Env.VAR_NAME }} only") and reads the

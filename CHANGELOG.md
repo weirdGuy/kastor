@@ -16,7 +16,8 @@ v0 exit criteria KAS-36 are met.
   `weirdGuy/kastor` to `getkastordev/kastor`. Go consumers must change imports
   and select a new-path core release; a GitHub redirect does not rewrite old
   module declarations. Plugin source identities and protocol v1 are unchanged.
-  The separate `weirdGuy/homebrew-tap` stays in place. See [RELEASING.md](RELEASING.md)
+  The Homebrew tap also moved to `getkastordev/homebrew-tap`, with install
+  command `brew install getkastordev/tap/kastor`. See [RELEASING.md](RELEASING.md)
   for publication prerequisites and installation verification.
 
 ### Added
