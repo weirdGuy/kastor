@@ -13,7 +13,7 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/zclconf/go-cty/cty"
 
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 // projectFileHCL mirrors the raw HCL layout of a project file. It exists only

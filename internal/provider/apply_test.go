@@ -9,9 +9,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/weirdGuy/kastor/internal/provider"
-	"github.com/weirdGuy/kastor/internal/provider/providertest"
-	"github.com/weirdGuy/kastor/internal/state"
+	"github.com/getkastordev/kastor/internal/provider"
+	"github.com/getkastordev/kastor/internal/provider/providertest"
+	"github.com/getkastordev/kastor/internal/state"
 )
 
 // countingSave returns a save callback that counts invocations.

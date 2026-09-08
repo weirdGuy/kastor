@@ -15,8 +15,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/weirdGuy/kastor/internal/schema"
-	protocol "github.com/weirdGuy/kastor/protocol/v1"
+	"github.com/getkastordev/kastor/internal/schema"
+	protocol "github.com/getkastordev/kastor/protocol/v1"
 )
 
 func TestInitLocksInstallsAndWorksOffline(t *testing.T) {

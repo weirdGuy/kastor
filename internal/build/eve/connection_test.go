@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 // TestConnectionAuthEnvRejectsPlatformScheme is the eve half of §3.6's scheme

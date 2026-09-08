@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 // genInstructions emits an agent directory's instructions.md — eve's

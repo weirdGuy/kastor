@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/weirdGuy/kastor/internal/build"
+	"github.com/getkastordev/kastor/internal/build"
 )
 
 func write(t *testing.T, dir string, files ...build.File) *build.Report {

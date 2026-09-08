@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 // mcpConfigFile is the generated MCP connection config, read by mcp_support

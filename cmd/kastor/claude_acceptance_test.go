@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/weirdGuy/kastor/internal/provider"
-	"github.com/weirdGuy/kastor/internal/schema"
-	"github.com/weirdGuy/kastor/internal/state"
+	"github.com/getkastordev/kastor/internal/provider"
+	"github.com/getkastordev/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/state"
 )
 
 const (

@@ -70,6 +70,7 @@ release:
     > v0 exit criteria ([KAS-36](https://linear.app/getkastor/issue/KAS-36)) are met.
 
 # Homebrew cask in weirdGuy/homebrew-tap (`brew install weirdGuy/tap/kastor`).
+# This separate repository is not part of the core ownership transfer.
 # Casks are the current GoReleaser mechanism for taps (`brews` is deprecated)
 # and are macOS-only; Linux users have scripts/install.sh or `go install`.
 homebrew_casks:
@@ -90,7 +91,7 @@ homebrew_casks:
     # No token → skip pushing the cask instead of failing the release.
     skip_upload: '{{ if index .Env "TAP_GITHUB_TOKEN" }}false{{ else }}true{{ end }}'
     directory: Casks
-    homepage: "https://github.com/weirdGuy/kastor"
+    homepage: "https://github.com/getkastordev/kastor"
     description: "Terraform for AI agents — declarative agent specs in HCL"
     commit_msg_template: "Brew cask update for {{ .ProjectName }} version {{ .Tag }}"
     # Binaries are not signed/notarized (out of scope for v0), so clear the

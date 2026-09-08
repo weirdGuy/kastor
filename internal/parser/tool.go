@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/zclconf/go-cty/cty"
 
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 type toolFileHCL struct {

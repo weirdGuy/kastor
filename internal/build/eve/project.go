@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 // eveVersion is the eve release the generated project pins. Exact on

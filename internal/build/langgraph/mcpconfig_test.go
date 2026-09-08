@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 // TestMCPAuthEnvRejectsPlatformScheme covers the codegen half of §3.6's

@@ -12,8 +12,8 @@ import (
 	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/spf13/cobra"
 
-	"github.com/weirdGuy/kastor/internal/diff"
-	"github.com/weirdGuy/kastor/internal/module"
+	"github.com/getkastordev/kastor/internal/diff"
+	"github.com/getkastordev/kastor/internal/module"
 )
 
 func newFmtCmd() *cobra.Command {

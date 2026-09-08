@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	pluginruntime "github.com/weirdGuy/kastor/internal/plugin"
-	"github.com/weirdGuy/kastor/internal/schema"
-	protocol "github.com/weirdGuy/kastor/protocol/v1"
+	pluginruntime "github.com/getkastordev/kastor/internal/plugin"
+	"github.com/getkastordev/kastor/internal/schema"
+	protocol "github.com/getkastordev/kastor/protocol/v1"
 )
 
 // runCmd executes "kastor <args>" and returns combined output and the

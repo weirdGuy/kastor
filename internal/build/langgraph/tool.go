@@ -6,8 +6,8 @@ import (
 	"path"
 	"strings"
 
-	"github.com/weirdGuy/kastor/internal/build"
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/build"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 // genTool emits tools/<name>.py for one tool block. The interface (params,

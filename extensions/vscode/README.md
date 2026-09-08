@@ -1,6 +1,6 @@
 # Kastor for VS Code
 
-Syntax highlighting and file icons for [Kastor](https://github.com/weirdGuy/kastor)
+Syntax highlighting and file icons for [Kastor](https://github.com/getkastordev/kastor)
 agent specs.
 
 Kastor is a declarative HCL language for defining AI agents, tools, prompts, and

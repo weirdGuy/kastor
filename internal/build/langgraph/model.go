@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 // provider is the langgraph-side mapping of an Kastor model provider: the

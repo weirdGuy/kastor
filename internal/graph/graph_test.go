@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/weirdGuy/kastor/internal/graph"
-	"github.com/weirdGuy/kastor/internal/module"
+	"github.com/getkastordev/kastor/internal/graph"
+	"github.com/getkastordev/kastor/internal/module"
 )
 
 func load(t *testing.T, dir string) *module.Module {

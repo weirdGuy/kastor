@@ -10,8 +10,8 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/spf13/cobra"
 
-	"github.com/weirdGuy/kastor/internal/graph"
-	"github.com/weirdGuy/kastor/internal/module"
+	"github.com/getkastordev/kastor/internal/graph"
+	"github.com/getkastordev/kastor/internal/module"
 )
 
 func newValidateCmd() *cobra.Command {

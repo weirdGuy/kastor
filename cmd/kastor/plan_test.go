@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/weirdGuy/kastor/internal/provider"
-	"github.com/weirdGuy/kastor/internal/provider/providertest"
-	"github.com/weirdGuy/kastor/internal/schema"
-	"github.com/weirdGuy/kastor/internal/state"
+	"github.com/getkastordev/kastor/internal/provider"
+	"github.com/getkastordev/kastor/internal/provider/providertest"
+	"github.com/getkastordev/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/state"
 )
 
 // runCLI executes "kastor <args>" and returns combined output and the

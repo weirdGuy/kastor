@@ -566,6 +566,11 @@ Kastor defines the agent contract and generates a LangGraph project from that sp
 
 ## Install
 
+The canonical repository is now `getkastordev/kastor`. The new `go install`
+path still requires a release declaring the new module path; the GitHub
+transfer alone does not make that installation available. See [RELEASING.md](RELEASING.md)
+for release order. The separate Homebrew tap remains `weirdGuy/tap`.
+
 Homebrew (macOS):
 
 ```sh
@@ -575,18 +580,18 @@ brew install weirdGuy/tap/kastor
 Install script:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/weirdGuy/kastor/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/getkastordev/kastor/main/scripts/install.sh | sh
 ```
 
 The install script verifies the release checksum, installs to `/usr/local/bin` or `~/.local/bin`, and never uses `sudo`.
 
-With Go 1.26+:
+With Go 1.26.4+ (after the new-path release):
 
 ```sh
-go install github.com/weirdGuy/kastor/cmd/kastor@latest
+go install github.com/getkastordev/kastor/cmd/kastor@latest
 ```
 
-Or download an archive for your platform from the [releases page](https://github.com/weirdGuy/kastor/releases), verify it against `checksums.txt`, and put the `kastor` binary on your PATH.
+Or download an archive for your platform from the [releases page](https://github.com/getkastordev/kastor/releases), verify it against `checksums.txt`, and put the `kastor` binary on your PATH.
 
 ### Install target plugins
 

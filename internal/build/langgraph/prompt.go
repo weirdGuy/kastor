@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 // genPromptsInit emits prompts/__init__.py: the shared {{var}} renderer.

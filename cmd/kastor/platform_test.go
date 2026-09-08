@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/weirdGuy/kastor/internal/module"
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/module"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 func TestLegacyClaudeAgentsProviderRegistered(t *testing.T) {

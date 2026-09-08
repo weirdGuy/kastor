@@ -9,7 +9,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
 
-	"github.com/weirdGuy/kastor/internal/provider"
+	"github.com/getkastordev/kastor/internal/provider"
 )
 
 // All assumptions about managed-agents-2026-04-01 response and request

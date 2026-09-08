@@ -8,10 +8,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/weirdGuy/kastor/internal/build"
-	"github.com/weirdGuy/kastor/internal/graph"
-	"github.com/weirdGuy/kastor/internal/module"
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/build"
+	"github.com/getkastordev/kastor/internal/graph"
+	"github.com/getkastordev/kastor/internal/module"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 // stub is a Generator returning a fixed result, for exercising the engine

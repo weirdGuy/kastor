@@ -3,7 +3,7 @@ package plugin
 import (
 	"context"
 
-	protocol "github.com/weirdGuy/kastor/protocol/v1"
+	protocol "github.com/getkastordev/kastor/protocol/v1"
 )
 
 // Client is the protocol surface used by the core adapters. Keeping the

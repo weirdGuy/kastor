@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/weirdGuy/kastor/internal/provider"
+	"github.com/getkastordev/kastor/internal/provider"
 )
 
 func diffObjects(desired, remote provider.Object) []provider.AttrDiff {

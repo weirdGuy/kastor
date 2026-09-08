@@ -15,7 +15,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
 
-	"github.com/weirdGuy/kastor/internal/provider"
+	"github.com/getkastordev/kastor/internal/provider"
 )
 
 // KAS-57 acceptance helpers. Declaring a tool in the spec is the grant, so the

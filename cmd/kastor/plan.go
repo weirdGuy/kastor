@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/weirdGuy/kastor/internal/provider"
+	"github.com/getkastordev/kastor/internal/provider"
 )
 
 func newPlanCmd() *cobra.Command {

@@ -10,6 +10,15 @@ v0 exit criteria KAS-36 are met.
 
 ## [Unreleased]
 
+### Changed
+
+- Prepared the canonical core repository and Go module migration from
+  `weirdGuy/kastor` to `getkastordev/kastor`. Go consumers must change imports
+  and select a new-path core release; a GitHub redirect does not rewrite old
+  module declarations. Plugin source identities and protocol v1 are unchanged.
+  The separate `weirdGuy/homebrew-tap` stays in place. See [RELEASING.md](RELEASING.md)
+  for publication prerequisites and installation verification.
+
 ### Added
 
 - Explicit target plugin requirements and selectors (KAS-76)
@@ -330,9 +339,9 @@ v0 exit criteria KAS-36 are met.
 - Release automation: GoReleaser + GitHub Actions on `v*` tags
 - Apache License 2.0
 
-[Unreleased]: https://github.com/weirdGuy/kastor/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/weirdGuy/kastor/compare/v0.1.2...v0.2.0
-[0.1.2]: https://github.com/weirdGuy/kastor/compare/v0.1.1...v0.1.2
-[0.1.1]: https://github.com/weirdGuy/kastor/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/weirdGuy/kastor/compare/v0.0.1-alpha...v0.1.0
-[0.0.1-alpha]: https://github.com/weirdGuy/kastor/releases/tag/v0.0.1-alpha
+[Unreleased]: https://github.com/getkastordev/kastor/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/getkastordev/kastor/compare/v0.1.2...v0.2.0
+[0.1.2]: https://github.com/getkastordev/kastor/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/getkastordev/kastor/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/getkastordev/kastor/compare/v0.0.1-alpha...v0.1.0
+[0.0.1-alpha]: https://github.com/getkastordev/kastor/releases/tag/v0.0.1-alpha

@@ -33,7 +33,7 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Optional: pushes the Homebrew formula to weirdGuy/homebrew-tap.
+          # Optional: pushes the Homebrew cask to weirdGuy/homebrew-tap.
           # If the secret is absent, .goreleaser.yaml skips the tap upload
           # instead of failing the release.
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}

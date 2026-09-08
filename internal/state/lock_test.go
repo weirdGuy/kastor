@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/weirdGuy/kastor/internal/state"
+	"github.com/getkastordev/kastor/internal/state"
 )
 
 func TestLockAcquireReleaseReacquire(t *testing.T) {

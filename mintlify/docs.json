@@ -56,7 +56,7 @@
     "links": [
       {
         "label": "GitHub",
-        "href": "https://github.com/weirdGuy/kastor"
+        "href": "https://github.com/getkastordev/kastor"
       }
     ]
   },
@@ -74,7 +74,7 @@
   },
   "footer": {
     "socials": {
-      "github": "https://github.com/weirdGuy/kastor"
+      "github": "https://github.com/getkastordev/kastor"
     }
   }
 }

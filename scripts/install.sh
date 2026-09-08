@@ -2,7 +2,7 @@
 # Install the latest kastor release from GitHub.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/weirdGuy/kastor/main/scripts/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/getkastordev/kastor/main/scripts/install.sh | sh
 #
 # Environment:
 #   KASTOR_INSTALL_DIR  Override the install directory. Defaults to
@@ -10,7 +10,7 @@
 #                       Never invokes sudo.
 set -eu
 
-REPO="weirdGuy/kastor"
+REPO="getkastordev/kastor"
 
 err() {
     echo "install.sh: $1" >&2

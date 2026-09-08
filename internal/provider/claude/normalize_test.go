@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/weirdGuy/kastor/internal/provider"
+	"github.com/getkastordev/kastor/internal/provider"
 )
 
 const fullMCPURL = "https://api.githubcopilot.com/mcp/"

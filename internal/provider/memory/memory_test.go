@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/weirdGuy/kastor/internal/provider"
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/provider"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 func TestLifecycle(t *testing.T) {

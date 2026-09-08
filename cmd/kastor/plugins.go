@@ -7,10 +7,10 @@ import (
 	"io"
 	"sort"
 
-	"github.com/weirdGuy/kastor/internal/module"
-	pluginruntime "github.com/weirdGuy/kastor/internal/plugin"
-	"github.com/weirdGuy/kastor/internal/schema"
-	protocol "github.com/weirdGuy/kastor/protocol/v1"
+	"github.com/getkastordev/kastor/internal/module"
+	pluginruntime "github.com/getkastordev/kastor/internal/plugin"
+	"github.com/getkastordev/kastor/internal/schema"
+	protocol "github.com/getkastordev/kastor/protocol/v1"
 )
 
 // Official source addresses are the stable identities stored in

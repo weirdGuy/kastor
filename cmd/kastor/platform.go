@@ -8,13 +8,13 @@ import (
 	"io"
 	"sort"
 
-	"github.com/weirdGuy/kastor/internal/module"
-	pluginruntime "github.com/weirdGuy/kastor/internal/plugin"
-	"github.com/weirdGuy/kastor/internal/provider"
-	"github.com/weirdGuy/kastor/internal/provider/claude"
-	"github.com/weirdGuy/kastor/internal/provider/memory"
-	"github.com/weirdGuy/kastor/internal/schema"
-	"github.com/weirdGuy/kastor/internal/state"
+	"github.com/getkastordev/kastor/internal/module"
+	pluginruntime "github.com/getkastordev/kastor/internal/plugin"
+	"github.com/getkastordev/kastor/internal/provider"
+	"github.com/getkastordev/kastor/internal/provider/claude"
+	"github.com/getkastordev/kastor/internal/provider/memory"
+	"github.com/getkastordev/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/state"
 )
 
 // providerFactories contains only the v0.2 compatibility implementations.

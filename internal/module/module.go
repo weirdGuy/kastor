@@ -15,8 +15,8 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 
-	"github.com/weirdGuy/kastor/internal/parser"
-	"github.com/weirdGuy/kastor/internal/schema"
+	"github.com/getkastordev/kastor/internal/parser"
+	"github.com/getkastordev/kastor/internal/schema"
 )
 
 // Module is a fully loaded and reference-resolved directory tree of Kastor
